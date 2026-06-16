@@ -1,0 +1,13 @@
+{
+  "name": "prompt-driven-software-factory",
+  "owner": {
+    "name": "Louis Lenoir"
+  },
+  "plugins": [
+    {
+      "name": "pdsf",
+      "source": "./",
+      "description": "Prompt Driven Software Factory — agentic software factory: grilling-driven design (CONTEXT.md + ADRs), two backlogs, vertical-slice issues, TDD + agentic tests, git-flow."
+    }
+  ]
+}
