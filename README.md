@@ -1,5 +1,7 @@
 # Prompt Driven Software Factory (PDSF)
 
+![Pipeline de l'usine logicielle agentique — du besoin au déploiement](docs/assets/01-pipeline.png)
+
 Une **usine logicielle agentique** : un process clair et un outillage précis pour chaque rôle
 (humain comme agent IA), du besoin métier jusqu'au déploiement. Le cœur de l'effort humain se
 concentre en **conception** ; les agents prennent en charge l'essentiel de l'implémentation,
@@ -90,9 +92,7 @@ agent. C'est la genèse d'une usine logicielle agentique.
 
 ## La méthode en un schéma
 
-![Pipeline de l'usine logicielle agentique](docs/assets/01-pipeline.png)
-
-Le flux va du besoin au déploiement :
+Le flux (schéma en tête de page) va du besoin au déploiement :
 
 **Comprendre le besoin -> Concevoir -> Planifier -> Implémenter -> Tester -> Valider -> Déployer**
 
