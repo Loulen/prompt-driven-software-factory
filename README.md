@@ -1,4 +1,4 @@
-# Prompt Driven Software Factory (PDSF)
+# Prompt Driven Factory (PDF)
 
 ![Pipeline de l'usine logicielle agentique — du besoin au déploiement](docs/assets/01-pipeline.png)
 
@@ -7,7 +7,7 @@ Une **usine logicielle agentique** : un process clair et un outillage précis po
 concentre en **conception** ; les agents prennent en charge l'essentiel de l'implémentation,
 sous supervision d'un expert.
 
-PDSF est un jeu de **skills** Claude Code (commandes `/…`) + un skill d'amorçage
+PDF est un jeu de **skills** Claude Code (commandes `/…`) + un skill d'amorçage
 (`/build-factory`) qui adapte le tout à ton projet. On l'installe **dans ton dépôt**, on ne
 forke pas celui-ci.
 
@@ -20,7 +20,7 @@ commité, partagé avec l'équipe ; recommandé pour démarrer) :
 
 ```bash
 # dans ton projet (existant ou neuf) — cible Claude Code pour écrire dans .claude/skills/
-npx skills add Loulen/prompt-driven-software-factory -a claude-code
+npx skills add Loulen/prompt-driven-factory -a claude-code
 ```
 
 > Garde **`-a claude-code`** : c'est ce qui **copie** les skills dans `.claude/skills/` (le
@@ -33,11 +33,11 @@ Puis, dans le projet : **`/build-factory`**.
 **Canal B — plugin Claude Code** (disponible dans tous tes projets, versionné, updatable) :
 
 ```text
-/plugin marketplace add Loulen/prompt-driven-software-factory
-/plugin install pdsf@prompt-driven-software-factory
+/plugin marketplace add Loulen/prompt-driven-factory
+/plugin install pdf@prompt-driven-factory
 ```
 
-En mode plugin, les skills sont **préfixés** : `/pdsf:build-factory`, `/pdsf:grill-with-docs`,
+En mode plugin, les skills sont **préfixés** : `/pdf:build-factory`, `/pdf:grill-with-docs`,
 etc. (le canal A les laisse sans préfixe : `/build-factory`).
 
 ### Ensuite : `/build-factory`
@@ -174,11 +174,11 @@ Les enjeux derrière ces choix :
 ## Structure du dépôt
 
 ```
-prompt-driven-software-factory/
+prompt-driven-factory/
 ├── README.md                      ← ce fichier (méthode + genèse)
 ├── .claude-plugin/
 │   ├── marketplace.json           ← catalogue (canal plugin)
-│   └── plugin.json                ← manifeste du plugin « pdsf »
+│   └── plugin.json                ← manifeste du plugin « pdf »
 ├── skills/
 │   ├── build-factory/             ← amorçage (+ seed-templates docs/agents)
 │   ├── grill-with-docs/           ← conception (+ CONTEXT-FORMAT, ADR-FORMAT)
