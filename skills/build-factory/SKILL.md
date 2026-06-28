@@ -37,6 +37,7 @@ Before asking anything, look at what already exists (assume nothing):
 - `CLAUDE.md` / `AGENTS.md` at the root — does either exist? Is there already an `## Agent skills` block?
 - `CONTEXT.md`, `CONTEXT-MAP.md` at the root — present? (single vs multi-context)
 - `docs/agents/`, `docs/adr/` — does a prior config already exist?
+- `.gitignore` — does it ignore any factory artifact (`.claude/`, `CONTEXT.md`, `docs/…`)? A blanket `.claude` is the usual culprit: editors, templates and some upstreams add it to drop *local* agent state (e.g. Excalidraw, since its "init CLAUDE.md"). The factory needs these **committed** — note it, you fix it in step 3.
 - **Is there application code?** (`src/`, `package.json`, etc.) → tells **existing project** vs **from-scratch**. Confirm your verdict with the person, don't decide it silently.
 
 ## 2. Decisions, one at a time (with their *why*)
@@ -193,6 +194,16 @@ Show a draft before writing; let them edit. Then:
 3. **Scaffold**: create `docs/adr/` (empty) and a **`CONTEXT.md` stub** at the root — a few
    section headers, no content (grilling fills it). The exact format is in
    `grill-with-docs/CONTEXT-FORMAT.md`; don't copy it, keep the stub minimal.
+
+4. **Make the factory versionable — adjust `.gitignore` if needed.** The factory *lives in the
+   repo*: `CONTEXT.md`, the ADRs, `docs/agents/` and the vendored skills under `.claude/skills/`
+   are **code, committed and shared with the team** — not local state. If `.gitignore` ignores
+   any of them (flagged in step 1), fix it now. The usual culprit is a blanket `.claude`, added
+   by editors/templates or inherited from upstream (e.g. Excalidraw gitignores `.claude` since
+   its "init CLAUDE.md"). Prefer **narrowing** over deleting wholesale: keep genuinely-local
+   files ignored (e.g. replace a blanket `.claude` with `.claude/settings.local.json`, or add a
+   negation `!.claude/skills/`), so skills + context get versioned while local settings stay
+   out. Then `git add` the artifacts. If nothing in `.gitignore` touches them, do nothing.
 
 ## 4. Kick off design (existing vs from-scratch)
 
