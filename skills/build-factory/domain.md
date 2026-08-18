@@ -48,7 +48,7 @@ into one deliberate step. Implementation, triage, and review **read** them; they
 When implementation discovers that an ADR is wrong or incomplete (a mechanism measured broken, a
 decision that didn't survive contact), record the discovery **in the ticket/PR** — with the
 measurements. The doc amendment happens in the next grilling session, which folds it into the ADR
-body properly (see the `grill-with-docs` skill's `ADR-FORMAT.md`). Shipping an ADR edit inside an
+body properly (see the `domain-modeling` skill's `ADR-FORMAT.md`). Shipping an ADR edit inside an
 implementation PR is how implementation post-mortems end up bloating the decision record.
 
 ## Use the glossary's vocabulary

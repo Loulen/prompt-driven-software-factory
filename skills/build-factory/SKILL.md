@@ -226,7 +226,7 @@ Show a draft before writing; let them edit. Then:
 
 4. **Scaffold**: create `docs/adr/` (empty) and a **`CONTEXT.md` stub** at the root — a few section
    headers, no content (the context bootstrap fills it). The exact format is in
-   `grill-with-docs/CONTEXT-FORMAT.md`; don't copy it, keep the stub minimal.
+   `domain-modeling/CONTEXT-FORMAT.md`; don't copy it, keep the stub minimal.
 
 ## Context mode — the project-context bootstrap
 
@@ -246,7 +246,7 @@ Reuse the support skills rather than re-inventing the interview:
 The context bootstrap is a **writer** of `CONTEXT.md` and the ADRs (the only writers are the two
 grilling sessions — this mode and `/grill-with-docs`; see `domain.md`, *Read, don't write*). Write
 inline as decisions crystallise — never batch. `CONTEXT.md` stays a glossary + product intent;
-implementation detail belongs in an ADR or a ticket. Formats: the `grill-with-docs` skill's
+implementation detail belongs in an ADR or a ticket. Formats: the `domain-modeling` skill's
 `CONTEXT-FORMAT.md` and `ADR-FORMAT.md`.
 
 Branch on the state detected in step 0:

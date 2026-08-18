@@ -240,13 +240,13 @@ prompt-driven-factory/
     ├── build-factory/              ← amorçage (backlogs, triage, issue-tracker-{github,gitlab,local}…)
     ├── verify-factory/             ← health check
     ├── to-us/                      ← front PO (+ US-FORMAT)
-    ├── grill-with-docs/            ← conception par US (+ CONTEXT-FORMAT, ADR-FORMAT)
+    ├── grill-with-docs/            ← conception par US (compose grilling + domain-modeling)
     ├── to-spec/                    ← synthèse de la spec
     ├── to-tickets/                 ← découpe en tickets (tranches verticales)
     ├── implement/                  ← boucle tdd + code-review + agentic-tests
     ├── triage/                     ← (+ AGENT-BRIEF, OUT-OF-SCOPE)
     ├── grilling/                   ← moteur de grilling
-    ├── domain-modeling/            ← modèle de domaine
+    ├── domain-modeling/            ← modèle de domaine (+ CONTEXT-FORMAT, ADR-FORMAT)
     ├── code-review/                ← revue à deux axes
     ├── codebase-design/            ← modules profonds (+ DEEPENING, DESIGN-IT-TWICE)
     ├── tdd/                        ← (+ tests, mocking)
