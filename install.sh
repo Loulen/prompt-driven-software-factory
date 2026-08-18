@@ -18,8 +18,8 @@
 # explicitly instead.
 set -u
 
-PDSF_REPO_URL="${PDSF_REPO:-https://github.com/ippontech/prompt-driven-factory.git}"
-PDSF_TARBALL_URL="${PDSF_TARBALL:-https://codeload.github.com/ippontech/prompt-driven-factory/tar.gz/refs/heads/main}"
+PDSF_REPO_URL="${PDSF_REPO:-https://github.com/Loulen/prompt-driven-software-factory.git}"
+PDSF_TARBALL_URL="${PDSF_TARBALL:-https://codeload.github.com/Loulen/prompt-driven-software-factory/tar.gz/refs/heads/main}"
 
 BEGIN_MARK="<!-- PDSF:BEGIN -->"
 END_MARK="<!-- PDSF:END -->"

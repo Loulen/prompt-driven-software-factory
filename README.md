@@ -14,31 +14,13 @@ charge un prompt markdown en contexte » existe — Claude Code, Copilot, Cursor
 
 ## Installation
 
-L'installation de référence est un **bootstrap `curl … | sh`** first-party, sans dépendance. Il :
+Dans ton dépôt (existant ou neuf), une commande — puis `/build-factory` :
 
-- installe **tous** les skills (pas de sélection à la carte) ;
-- demande le **harness** cible et y émet les skills — Claude Code → `.claude/skills/`,
-  Copilot → `.github/prompts/` — puis câble `CLAUDE.md` / `AGENTS.md` ;
-- demande si le dépôt est un **monorepo** (voir ci-dessous) ;
-- passe la main à **`/build-factory`**.
+```sh
+curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/install.sh | sh
+```
 
-> Les invocations exactes (URL du bootstrap, flags, pré-requis) vivent dans
-> **[`docs/INSTALL.md`](docs/INSTALL.md)** — les détails d'installation.
-
-**Monorepo.** Chaque **contexte métier** reçoit une **factory** autonome dans
-`.factory/<contexte>/` : sa propre copie des skills, plus les docs de domaine du contexte
-(`CONTEXT.md`, `docs/adr/`, `docs/agents/`). Les sous-projets membres y sont reliés par des
-**symlinks relatifs, un par skill**, dans leur `.claude/skills/` ; **rien n'est chargé à la
-racine** du monorepo — ouvrir la racine ne tire aucun contexte en mémoire. Le seul artefact
-partagé est `.factory/pdsf-install.sh`, l'outil résident **re-jouable** qui crée une factory ou y
-rattache un sous-projet (ADR-0003).
-
-**Autres canaux.** Escape hatches, documentés dans [`docs/INSTALL.md`](docs/INSTALL.md) :
-
-| Canal | Quand |
-| --- | --- |
-| `npx skills` | Un harness vers lequel le bootstrap n'émet pas encore. Copie les skills dans `.claude/skills/` ; dépend de Node. |
-| Plugin Claude Code | Disponible dans tous tes projets, versionné et updatable. Les skills sont alors **préfixés** : `/pdsf:build-factory`, `/pdsf:grill-with-docs`, etc. |
+Monorepo, mode hors-ligne, plugin Claude Code, `npx` : voir **[`docs/INSTALL.md`](docs/INSTALL.md)**.
 
 ### Ensuite : `/build-factory`
 

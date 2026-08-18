@@ -12,14 +12,17 @@ L'installation de référence est un **bootstrap first-party, sans dépendance**
 les skills (pas de sélection à la carte), demande le harness cible et l'éventuel mode monorepo, puis
 passe la main à `/build-factory`.
 
-Le script est **`install.sh`**, à la racine du dépôt. Une fois une URL de bootstrap publiée, la
-commande figée sera :
+Le script est **`install.sh`**, à la racine du dépôt. La commande de référence :
 
 ```sh
-curl -fsSL <URL-du-bootstrap> | sh          # URL renseignée à la publication
+curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/install.sh | sh
 ```
 
-En attendant, on l'exécute depuis un checkout local — c'est **la** commande concrète aujourd'hui :
+> Tant que `install.sh` n'est pas sur la branche `main` du dépôt, le `curl` renvoie 404 :
+> publier d'abord.
+
+On peut aussi l'exécuter depuis un checkout local (fetch réseau, sauf `PDSF_SRC` — voir
+[Mode hors-ligne](#mode-hors-ligne)) :
 
 ```sh
 sh install.sh [DOSSIER_CIBLE]               # défaut : le dossier courant
