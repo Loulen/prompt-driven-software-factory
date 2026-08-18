@@ -3,8 +3,9 @@
 In a monorepo, each **business context** gets a self-contained factory at `.factory/<context>/` —
 its own copy of the skills, plus the shared domain docs (`CONTEXT.md`, `docs/adr/`, `docs/agents/`)
 and method constants (`AGENTS.md`) for that context. A context's sub-projects are wired to it by
-per-skill **relative** symlinks into their `.claude/skills/` and a relative pointer from their
-`AGENTS.md`; they share the context's skills and domain.
+per-skill **relative** symlinks into their generic `.agents/skills/` and a relative pointer from
+their `AGENTS.md` to the factory; a `claude` member additionally gets the symlink overlay
+(`.claude/skills → .agents/skills`, `CLAUDE.md → AGENTS.md`). They share the context's skills and domain.
 
 **Nothing is installed or loaded at the monorepo root** — opening the root never drags a context's
 skills into context, and unrelated sub-projects stay untouched. The **only** artifact shared across

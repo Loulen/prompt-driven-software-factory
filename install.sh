@@ -6,8 +6,9 @@
 #   * .factory/pdsf-install.sh — the resident monorepo tool (a byte copy of this file, written
 #                                 during a monorepo install; never hand-maintained separately).
 #
-# Zero dependency: POSIX sh only (no bash-isms, no jq). Portable slash emitter for Claude Code
-# (.claude/skills/) and GitHub Copilot (.github/prompts/). See docs/INSTALL.md, ADR-0002, ADR-0003.
+# Zero dependency: POSIX sh only (no bash-isms, no jq). Generic emitter: regular skills under
+# .agents/skills/ + a wired AGENTS.md (read by most harnesses, Copilot included); Claude is a thin
+# symlink overlay on top. See docs/INSTALL.md, ADR-0002, ADR-0003.
 #
 # Everything a prompt asks can also be supplied via a PDSF_* env var (see --help), so the installer
 # is drivable non-interactively (agentic tests) AND interactively (tmux). PDSF_SRC=<local checkout>
@@ -47,20 +48,23 @@ ENVIRONMENT (each also asked interactively when unset; set it to skip the prompt
   PDSF_SRC       Local PDSF checkout to install FROM (its skills/, CONTEXT.md, docs/).
                  When set, the installer runs fully OFFLINE — no clone, no download.
                  When unset, the repo is fetched (git --depth 1 clone, else curl tarball).
-  PDSF_HARNESS   Target harness: `claude` (.claude/skills/) or `copilot` (.github/prompts/).
-                 Default: claude.
+  PDSF_HARNESS   Target harness: `generic` (default) or `claude`.
+                 generic = regular skills under .agents/skills/ + a wired AGENTS.md — read by
+                 most harnesses, Copilot included. claude = the generic install plus a symlink
+                 overlay (.claude/skills -> .agents/skills, CLAUDE.md -> AGENTS.md).
   PDSF_MONOREPO  `y`/`n` — install a self-contained factory per context (.factory/<ctx>/)?
                  Default: n (single-project install).
   PDSF_CONTEXT   Monorepo only: the factory/context name (e.g. billing).
   PDSF_MEMBERS   Monorepo only: member sub-folders to wire, space- or comma-separated
                  (e.g. "apps/web apps/api"). Empty = create the factory, wire nothing yet.
   PDSF_ACTION    Resident tool only: `create` (or 1) / `wire` (or 2).
-  PDSF_AGENTFILE Override the wired agent file (default: CLAUDE.md for claude, AGENTS.md otherwise).
   PDSF_REPO      Override the git clone URL used when PDSF_SRC is unset.
   PDSF_TARBALL   Override the tarball URL used when neither PDSF_SRC nor git is available.
 
 NOTES
   * Never installs into the PDSF source repo itself — always operates on TARGET_DIR / cwd.
+  * Skills are generic (regular SKILL.md folders) under .agents/skills/; Claude is a symlink
+    overlay on top. Copilot & other harnesses read the wired AGENTS.md.
   * Monorepo wiring uses RELATIVE symlinks (survive a re-clone). Keep .factory/ out of any
     sparse-checkout. Windows without symlink support is a known limitation.
 EOF
@@ -187,70 +191,66 @@ resolve_src() {
 
 # ---------------------------------------------------------------------------- emitter
 
-# emit_skill SRC HARNESS DEST_ROOT SKILL — place one skill into the harness slash location.
-emit_skill() {
-  _src=$1; _harness=$2; _root=$3; _skill=$4
-  case "$_harness" in
-    copilot)
-      mkdir -p "$_root/.github/prompts"
-      rm -rf "$_root/.github/prompts/$_skill" "$_root/.github/prompts/$_skill.prompt.md"
-      # Slash entry (Copilot loads *.prompt.md); supporting files kept alongside for reference.
-      cp "$_src/skills/$_skill/SKILL.md" "$_root/.github/prompts/$_skill.prompt.md"
-      cp -R "$_src/skills/$_skill" "$_root/.github/prompts/$_skill"
-      ;;
-    claude|*)
-      mkdir -p "$_root/.claude/skills"
-      rm -rf "$_root/.claude/skills/$_skill"
-      cp -R "$_src/skills/$_skill" "$_root/.claude/skills/$_skill"
-      ;;
-  esac
-}
+# The generic, harness-neutral skills location. AGENTS.md (the cross-harness standard that Copilot,
+# Cursor, Codex… all read) points every harness at it. Claude gets a thin symlink overlay on top.
+SKILLS_DIR=".agents/skills"
 
-emit_all_skills() {
-  _src=$1; _harness=$2; _root=$3
+# emit_generic SRC ROOT — copy every skill (as regular skill folders) into ROOT/.agents/skills/.
+emit_generic() {
+  _src=$1; _root=$2
+  _dest="$_root/$SKILLS_DIR"
+  mkdir -p "$_dest"
   _n=0
   for _s in $(list_skills "$_src"); do
-    emit_skill "$_src" "$_harness" "$_root" "$_s"
+    rm -rf "$_dest/$_s"
+    cp -R "$_src/skills/$_s" "$_dest/$_s"
     _n=$((_n + 1))
   done
-  log "emitted $_n skills into $(harness_dir "$_harness") under $_root"
+  # Prune skills dropped from the source set (this dir is fully PDSF-managed).
+  for _d in "$_dest"/*/; do
+    [ -d "$_d" ] || continue
+    _old=${_d%/}; _old=${_old##*/}
+    list_skills "$_src" | grep -qxF "$_old" || rm -rf "$_d"
+  done
+  log "emitted $_n skills into $SKILLS_DIR under $_root"
 }
 
-harness_dir() {
-  case "$1" in copilot) printf '.github/prompts' ;; *) printf '.claude/skills' ;; esac
-}
-
-agent_file_for() {
-  if [ -n "${PDSF_AGENTFILE:-}" ]; then printf '%s' "$PDSF_AGENTFILE"; return; fi
-  case "$1" in claude) printf 'CLAUDE.md' ;; *) printf 'AGENTS.md' ;; esac
+# link_claude DIR — the Claude overlay. "Claude support is just a symlink on top of the generic
+# default": alias .agents/skills into .claude/skills, and point CLAUDE.md at AGENTS.md. Both relative.
+link_claude() {
+  _dir=$1
+  mkdir -p "$_dir/.claude"
+  rm -rf "$_dir/.claude/skills"
+  ln -s "../$SKILLS_DIR" "$_dir/.claude/skills" \
+    || warn "symlink .claude/skills failed (Windows without symlinks?)"
+  if [ -e "$_dir/CLAUDE.md" ] && [ ! -L "$_dir/CLAUDE.md" ]; then
+    # a real CLAUDE.md already holds user content — point to AGENTS.md, don't clobber it
+    write_block "$_dir/CLAUDE.md" "@AGENTS.md"
+  else
+    rm -f "$_dir/CLAUDE.md"
+    ln -s "AGENTS.md" "$_dir/CLAUDE.md" || warn "symlink CLAUDE.md failed"
+  fi
+  log "linked .claude/skills -> $SKILLS_DIR and CLAUDE.md -> AGENTS.md (Claude overlay)"
 }
 
 # ---------------------------------------------------------------------------- single-project
 
 install_single() {
   _root=$1; _src=$2; _harness=$3
-  emit_all_skills "$_src" "$_harness" "$_root"
+  emit_generic "$_src" "$_root"
+  write_block "$_root/AGENTS.md" "## PDSF skills
 
-  _af=$(agent_file_for "$_harness")
-  if [ "$_harness" = claude ]; then
-    _import="
+The PDSF skills are installed under \`$SKILLS_DIR/\`. Invoke any of them as \`/<skill>\` (e.g.
+\`/build-factory\`) — your harness loads the skill's markdown into context on demand. This block is
+managed by the installer; \`/build-factory\` refines it with the method constants and the workflow map.
 
 Git flow — every instance must know it:
 
-@.claude/skills/git-flow/SKILL.md"
-  else
-    _import="
+@$SKILLS_DIR/git-flow/SKILL.md
 
-Skills loaded from \`.github/prompts/*.prompt.md\` (Copilot slash prompts)."
-  fi
-  write_block "$_root/$_af" "## PDSF skills
-
-The PDSF skills are installed under \`$(harness_dir "$_harness")\`. Invoke them as \`/<skill>\`
-(e.g. \`/build-factory\`). This block is managed by the installer; \`/build-factory\` refines it
-with the method constants and the \`## Agent skills\` wiring.
-
-**Next step: run \`/build-factory\`** to wire this project's backlogs, triage, and domain.$_import"
-  log "wired $_af"
+**Next step: run \`/build-factory\`** to wire this project's backlogs, triage, and domain."
+  log "wired AGENTS.md"
+  if [ "$_harness" = claude ]; then link_claude "$_root"; fi
   printf '\n'
   log "done. Next step: run  /build-factory"
 }
@@ -313,10 +313,9 @@ wire_member() {
   _mabs=$(abspath "$_mdir")
   _facabs=$(abspath "$_root/.factory/$_ctx")
 
-  _slashdir=$(harness_dir "$_harness")
-  mkdir -p "$_mabs/$_slashdir"
-  _linkbase="$_mabs/$_slashdir"
-
+  # Generic wiring: per-skill relative symlinks into the factory, under the member's .agents/skills/.
+  _linkbase="$_mabs/$SKILLS_DIR"
+  mkdir -p "$_linkbase"
   # Clear existing PDSF-managed links (they point into this factory) before recreating the current
   # set, so a skill dropped from the factory leaves no dangling symlink (ADR-0003). Any user-added
   # entry (not a link into this factory) is left untouched.
@@ -324,35 +323,26 @@ wire_member() {
     [ -L "$_l" ] || continue
     case "$(readlink "$_l")" in *".factory/$_ctx/skills"*) rm -f "$_l" ;; esac
   done
-
   for _s in $(list_skills "$_root/.factory/$_ctx"); do
-    if [ "$_harness" = copilot ]; then
-      _tgt="$_facabs/skills/$_s/SKILL.md"
-      _link="$_linkbase/$_s.prompt.md"
-    else
-      _tgt="$_facabs/skills/$_s"
-      _link="$_linkbase/$_s"
-    fi
+    _tgt="$_facabs/skills/$_s"
     _rel=$(relpath "$_tgt" "$_linkbase")
-    rm -rf "$_link"
-    ln -s "$_rel" "$_link" || warn "symlink failed for $_s in $_member (Windows without symlinks?)"
+    rm -rf "$_linkbase/$_s"
+    ln -s "$_rel" "$_linkbase/$_s" || warn "symlink failed for $_s in $_member (Windows without symlinks?)"
   done
 
-  # Relative AGENTS.md pointer + CLAUDE.md -> AGENTS.md.
-  _facagents="$_facabs/AGENTS.md"
-  _relagents=$(relpath "$_facagents" "$_mabs")
+  # Member AGENTS.md points at the factory's method constants + domain docs.
+  _relagents=$(relpath "$_facabs/AGENTS.md" "$_mabs")
   write_block "$_mdir/AGENTS.md" "## PDSF factory pointer
 
 This sub-project is wired to the **$_ctx** factory. Method constants and domain docs:
 
 @$_relagents
 
-Skills are symlinked into \`$_slashdir/\` (relative links into the factory)."
-  if [ "$_harness" = claude ]; then
-    write_block "$_mdir/CLAUDE.md" "@AGENTS.md"
-  fi
+Skills are symlinked into \`$SKILLS_DIR/\` (relative links into the factory)."
+  log "wired member '$_member' -> .factory/$_ctx (skills in $SKILLS_DIR)"
 
-  log "wired member '$_member' -> .factory/$_ctx (relative symlinks in $_slashdir)"
+  # Claude overlay: alias .agents/skills into .claude/skills + CLAUDE.md -> AGENTS.md.
+  if [ "$_harness" = claude ]; then link_claude "$_mdir"; fi
 }
 
 # copy_self ROOT SRC SELF — write .factory/pdsf-install.sh from the single source (install.sh).
@@ -403,8 +393,12 @@ Pass a target dir:  sh install.sh /path/to/your/project"
     die "source and target are the same directory ($_target) — pass a different target."
   fi
 
-  _harness=$(ask PDSF_HARNESS "Target harness? [claude/copilot] (claude): " "claude")
-  case "$_harness" in claude|copilot) ;; *) die "unknown harness '$_harness' (claude|copilot)";; esac
+  _harness=$(ask PDSF_HARNESS "Target harness? [claude/generic] (generic): " "generic")
+  case "$_harness" in
+    claude|generic) ;;
+    copilot) _harness=generic; log "Copilot is covered by the generic install (AGENTS.md)." ;;
+    *) die "unknown harness '$_harness' (claude|generic)";;
+  esac
 
   _mono=$(ask PDSF_MONOREPO "Monorepo (a self-contained factory per context)? [y/N]: " "n")
   if is_yes "$_mono"; then
@@ -429,8 +423,12 @@ resident_flow() {
   log "resident tool — monorepo root: $_root"
 
   _action=$(ask PDSF_ACTION "Action? [1] create a factory  [2] wire sub-folders  (1): " "1")
-  _harness=$(ask PDSF_HARNESS "Target harness? [claude/copilot] (claude): " "claude")
-  case "$_harness" in claude|copilot) ;; *) die "unknown harness '$_harness'";; esac
+  _harness=$(ask PDSF_HARNESS "Target harness? [claude/generic] (generic): " "generic")
+  case "$_harness" in
+    claude|generic) ;;
+    copilot) _harness=generic; log "Copilot is covered by the generic install (AGENTS.md)." ;;
+    *) die "unknown harness '$_harness' (claude|generic)";;
+  esac
 
   case "$_action" in
     2|wire)

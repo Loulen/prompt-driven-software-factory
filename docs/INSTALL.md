@@ -30,16 +30,29 @@ Le bootstrap :
 
 1. **Résout la source des skills** — un dépôt cloné en `git --depth 1`, une archive `curl`, ou un
    checkout local via `PDSF_SRC` (voir [Mode hors-ligne](#mode-hors-ligne)).
-2. **Demande le harness** et y émet **tous** les skills (énumérés depuis `skills/*/`, jamais codés
-   en dur) :
-   - Claude Code → `.claude/skills/<skill>/`
-   - Copilot → `.github/prompts/<skill>.prompt.md`
-   - puis câble le fichier d'agent (`CLAUDE.md` pour Claude, `AGENTS.md` sinon) via un bloc marqué
-     `<!-- PDSF:BEGIN -->…<!-- PDSF:END -->` — **ré-exécutable**, jamais dupliqué.
-3. **Demande si le dépôt est un monorepo** (voir ci-dessous).
-4. **Passe la main à `/build-factory`**.
+2. **Émet tous les skills** (énumérés depuis `skills/*/`, jamais codés en dur) au **format générique** :
+   des skills réguliers (dossiers `SKILL.md`) sous `.agents/skills/`, plus un `AGENTS.md` câblé via un
+   bloc marqué `<!-- PDSF:BEGIN -->…<!-- PDSF:END -->` (**ré-exécutable**, jamais dupliqué). `AGENTS.md`
+   est le standard inter-harness que **Copilot, Cursor, Codex…** lisent déjà.
+3. **Demande le harness** — `generic` (défaut) ou `claude`.
+4. **Demande si le dépôt est un monorepo** (voir ci-dessous).
+5. **Passe la main à `/build-factory`**.
 
 Il n'installe **jamais** dans le dépôt source PDSF lui-même : il refuse et réclame un dossier cible.
+
+### Harness : `generic` (défaut) ou `claude`
+
+La base est **générique** et se suffit à elle-même — `.agents/skills/` + `AGENTS.md`. Le choix
+`claude` ne fait qu'**ajouter un overlay de symlinks** par-dessus cette base, pour que Claude Code
+retrouve ses chemins :
+
+| Harness | Ce qui est posé |
+| --- | --- |
+| `generic` (défaut) | `.agents/skills/<skill>/` (fichiers réels) + `AGENTS.md` câblé. Lu par Copilot, Cursor, Codex, … |
+| `claude` | le générique **+** `.claude/skills → ../.agents/skills` **+** `CLAUDE.md → AGENTS.md` (symlinks relatifs). |
+
+Copilot n'a donc **pas** de traitement spécifique : il consomme le `AGENTS.md` générique comme les
+autres. « Avoir Claude, c'est juste un symlink au-dessus du défaut générique. »
 
 ### Contrat de variables d'environnement
 
@@ -50,12 +63,11 @@ question est posée sur `/dev/tty` (chemin **interactif** nominal).
 | Variable | Sens | Défaut |
 | --- | --- | --- |
 | `PDSF_SRC` | Checkout PDSF local d'où installer (`skills/`, `CONTEXT.md`, `docs/`). Force le mode **hors-ligne**. | (fetch réseau) |
-| `PDSF_HARNESS` | `claude` (→ `.claude/skills/`) ou `copilot` (→ `.github/prompts/`). | `claude` |
+| `PDSF_HARNESS` | `generic` (`.agents/skills/` + `AGENTS.md`) ou `claude` (générique + overlay symlinks). | `generic` |
 | `PDSF_MONOREPO` | `y`/`n` — installer une factory autonome par contexte (`.factory/<ctx>/`) ? | `n` |
 | `PDSF_CONTEXT` | Monorepo : nom du contexte / de la factory. | (demandé) |
 | `PDSF_MEMBERS` | Monorepo : sous-dossiers membres à câbler, séparés par espace ou virgule. Vide = aucun. | (demandé) |
 | `PDSF_ACTION` | Outil résident : `create` (ou `1`) / `wire` (ou `2`). | `create` |
-| `PDSF_AGENTFILE` | Force le fichier d'agent câblé. | `CLAUDE.md` / `AGENTS.md` |
 | `PDSF_REPO`, `PDSF_TARBALL` | Sources de fetch alternatives quand `PDSF_SRC` est absent. | dépôt public |
 
 ### Mode hors-ligne
@@ -65,7 +77,7 @@ il copie depuis le checkout indiqué. C'est aussi le **seam de test** de la suit
 d'un run non-interactif complet, mono-projet, dans un dossier cible :
 
 ```sh
-PDSF_SRC=/chemin/vers/pdsf PDSF_HARNESS=claude PDSF_MONOREPO=n \
+PDSF_SRC=/chemin/vers/pdsf PDSF_HARNESS=generic PDSF_MONOREPO=n \
   sh install.sh /chemin/vers/mon-projet
 ```
 
@@ -77,7 +89,8 @@ Sur `monorepo = oui`, chaque **contexte métier** devient une **factory autonome
 - sa propre copie de `skills/`, plus les docs de domaine du contexte (`CONTEXT.md`, `docs/adr/`,
   `docs/agents/`, `AGENTS.md`) ;
 - les sous-projets membres sont reliés par des **symlinks relatifs, un par skill**, dans leur
-  `.claude/skills/`, plus un pointeur relatif depuis leur `AGENTS.md` (`CLAUDE.md` → `AGENTS.md`) ;
+  `.agents/skills/`, plus un pointeur relatif depuis leur `AGENTS.md` vers la factory. En harness
+  `claude`, le membre reçoit en plus l'overlay `.claude/skills → .agents/skills` et `CLAUDE.md → AGENTS.md` ;
 - **rien n'est chargé à la racine** du monorepo.
 
 Le seul artefact partagé est **`.factory/pdsf-install.sh`** — une **copie octet-pour-octet** de
@@ -104,8 +117,8 @@ limitation connue.
 
 | Canal | Quand |
 | --- | --- |
-| `npx skills` | Un harness vers lequel le bootstrap n'émet pas encore. Copie les skills dans `.claude/skills/` ; dépend de Node. |
-| Plugin Claude Code | Disponible dans tous tes projets, versionné et updatable. Les skills sont alors **préfixés** : `/pdsf:build-factory`, `/pdsf:grill-with-docs`, etc. — dans ce cas, retirer la ligne `@import` de `git-flow` dans le `CLAUDE.md` généré (le skill se charge à la demande). |
+| `npx skills` | Un harness aux conventions particulières que tu veux servir explicitement. Dépend de Node. |
+| Plugin Claude Code | Disponible dans tous tes projets, versionné et updatable. Les skills sont alors **préfixés** : `/pdsf:build-factory`, `/pdsf:grill-with-docs`, etc. — dans ce cas, retirer la ligne `@import` de `git-flow` dans le `AGENTS.md` généré (le skill se charge à la demande). |
 
 ## Après l'installation
 
