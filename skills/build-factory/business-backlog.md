@@ -13,7 +13,7 @@ the need").
 
 Tool: `<tool to define>` (Jira, Trello, Notion, Linear, GitHub/GitLab Projects, spreadsheet,
 markdown…). Fill in below how to reach it. If no tool is integrable (no CLI/MCP), the flow still
-holds: the back-link (step 6 of `/to-issues`) becomes a manual gesture.
+holds: the back-link (step 6 of `/to-tickets`) becomes a manual gesture.
 
 - **Access / tool**: `<CLI, MCP, URL, or "manual">`
 - **Location**: `<board / project / page — id or URL>`
@@ -33,17 +33,17 @@ typically by moving them into a dedicated column/state. The agent only picks fro
 
 ```
 # READ a story:        <command or gesture>
-# COMMENT on a story:   <command or gesture>   (used by /to-issues for traceability)
+# COMMENT on a story:   <command or gesture>   (used by /to-tickets for traceability)
 # MOVE / change state:  <command or gesture>
 ```
 
 ## Link to the technical backlog
 
-Keep the **business reference** (URL or story id) in the PRD / technical issues, for two-way
+Keep the **business reference** (URL or story id) in the spec / technical tickets, for two-way
 traceability.
 
     business backlog (story selected by a human)
-      └─ /grill-with-docs   → CONTEXT.md + ADRs   (on integration/<business-ref>-<slug>)
-          └─ /to-prd        → PRD on the technical backlog
-              └─ /to-issues → technical issues + back-comment on the business story
+      └─ /grill-with-docs    → CONTEXT.md + ADRs   (on integration/<business-ref>-<slug>)
+          └─ /to-spec        → spec on the technical backlog
+              └─ /to-tickets → technical tickets + back-comment on the business story
                   └─ implementation (see git-flow)

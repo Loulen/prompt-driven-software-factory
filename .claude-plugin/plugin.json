@@ -1,5 +1,5 @@
 {
   "name": "pdsf",
-  "description": "Prompt Driven Software Factory — design (grill-with-docs) to planning (to-prd, to-issues) to implementation (tdd, agentic-tests) under git-flow, wired by build-factory.",
+  "description": "Prompt Driven Software Factory — business stories (to-us) to design (grill-with-docs) to planning (to-spec, to-tickets) to implementation (implement: tdd + code-review + agentic-tests) under git-flow, wired by build-factory and checked by verify-factory.",
   "version": "0.1.0"
 }

@@ -1,15 +1,16 @@
 ---
 name: grill-with-docs
-description: Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
+description: Per-story grilling that stress-tests your plan against the project's domain model, sharpens terminology, and writes CONTEXT.md/ADRs inline as decisions crystallise. Run it when designing a business user story before slicing it into work.
+disable-model-invocation: true
 ---
 
 <what-to-do>
 
-Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+Grill me relentlessly about this plan until we reach a shared understanding, resolving one decision at a time down each branch of the design tree. For each question give your recommended answer, and ask one round at a time — wait for my answer before the next round.
 
-Ask the questions one at a time, waiting for feedback on each question before continuing.
+Drive the session with the two support skills: invoke **grilling** for the interview method and **domain-modeling** for the domain-modeling discipline (both are model-invoked, so reach them with the Skill tool).
 
-If a question can be answered by exploring the codebase, explore the codebase instead.
+When a question can be answered from the codebase, find the fact yourself instead of asking me.
 
 </what-to-do>
 
@@ -17,74 +18,27 @@ If a question can be answered by exploring the codebase, explore the codebase in
 
 ## Branch placement
 
-This session writes versioned context files (`CONTEXT.md`, ADRs). Before the first file write, make sure you're on the **integration branch** for this business user story — not on `develop` or a stray `feature/*` branch:
+This session writes versioned context files (`CONTEXT.md`, ADRs). Before the first file write, land on the **integration branch** for this business user story — not on `develop` or a stray `feature/*` branch:
 
-- Branch `integration/<business-ref>-<slug>` from up-to-date `develop` (create it if absent). Name it after the **business user story** from the business backlog (its reference + a slug) — you're at the grilling step, *before* `/to-prd`, so the branch is NOT named after the PRD/technical issue (it doesn't exist yet). See `docs/agents/business-backlog.md` for where the business backlog lives.
-- The grilling output lands here. `/to-prd` then creates the PRD; `/to-issues` pushes this branch and bases the sub-issues on it; `ready-for-agent` sub-issues auto-merge back into the integration branch (after a green local check), and the `integration -> develop` merge stays human.
+- Branch `integration/<business-ref>-<slug>` from up-to-date `develop` (create it if absent). Name it after the **business user story** from the business backlog (its reference + a slug) — you're at the grilling step, *before* `/to-spec`, so the branch is NOT named after the spec/technical ticket (it doesn't exist yet). See `docs/agents/business-backlog.md` for where the business backlog lives.
+- The grilling output lands here. `/to-spec` then synthesises the spec; `/to-tickets` pushes this branch and bases the sub-tickets on it; `ready-for-agent` sub-tickets auto-merge back into the integration branch (after a green local check), and the `integration -> develop` merge stays human.
 
 See the `git-flow` skill for the full integration-branch workflow.
 
-## Domain awareness
+## What each support skill carries
 
-During codebase exploration, also look for existing documentation:
+- **grilling** — the interview method: map the plan as a design tree, work the frontier in rounds, ask one round at a time with a recommended answer per question, and dispatch a subagent (if available) to find facts rather than asking for them.
+- **domain-modeling** — the writing discipline: challenge terms against the glossary, sharpen fuzzy language, stress-test relationships with concrete scenarios, cross-check claims against the code, and write `CONTEXT.md`/ADRs inline as decisions land. It uses the formats in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md) and [ADR-FORMAT.md](./ADR-FORMAT.md).
 
-### File structure
+## This session is a writer
 
-Most repos have a single context:
+Two grilling sessions are the **only writers** of `CONTEXT.md` and the ADRs: **`build-factory` context mode** (the project-context bootstrap) and **`grill-with-docs`** (per story). That is their purpose — externalizing business context and technical decisions into one deliberate step. Every other flow (implementation, triage, review) **reads** them and routes any discovered correction back to a grilling session via the ticket/PR — with the measurements (see `build-factory/domain.md`, *Read, don't write*).
 
-```
-/
-├── CONTEXT.md
-├── docs/
-│   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
-└── src/
-```
+## CONTEXT.md stays devoid of implementation
 
-If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
+`CONTEXT.md` is a glossary and nothing else — never a spec, a scratch pad, a changelog, or a home for implementation decisions. An entry that needs the full contract points to the ADR that fixed it; it never inlines the contract. If a session leaves material that fits neither the glossary nor an ADR (implementation plans, case matrices, test inventories), it belongs in the ticket/PR that will implement it. Write entries with the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
 
-```
-/
-├── CONTEXT-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── CONTEXT.md
-│   │   └── docs/adr/                 ← context-specific decisions
-│   └── billing/
-│       ├── CONTEXT.md
-│       └── docs/adr/
-```
-
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
-
-## During the session
-
-### Challenge against the glossary
-
-When the user uses a term that conflicts with the existing language in `CONTEXT.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
-
-### Sharpen fuzzy language
-
-When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account' — do you mean the Customer or the User? Those are different things."
-
-### Discuss concrete scenarios
-
-When domain relationships are being discussed, stress-test them with specific scenarios. Invent scenarios that probe edge cases and force the user to be precise about the boundaries between concepts.
-
-### Cross-reference with code
-
-When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
-
-### Update CONTEXT.md inline
-
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
-
-`CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
-
-### Offer ADRs sparingly
+## Offer ADRs sparingly
 
 Only offer to create an ADR when all three are true:
 
@@ -93,5 +47,11 @@ Only offer to create an ADR when all three are true:
 3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons
 
 If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+
+An ADR captures the decision, its why, and the measurements that killed the alternatives — never the implementation plan that follows (see *What stays out* in ADR-FORMAT.md). When a decision revises an earlier ADR, rewrite that ADR's body so it reads true today (see *Amending an ADR*) — never stack a dated addendum on a body that has become wrong.
+
+## Next step
+
+When shared understanding is reached and the docs are written, signpost the next step: `/to-spec` to synthesise the spec on the technical backlog from this grilling output. Guided, not gated — name the step, don't force it.
 
 </supporting-info>

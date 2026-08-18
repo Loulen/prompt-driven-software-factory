@@ -8,7 +8,7 @@ How the engineering skills should consume this repo's domain documentation when 
 - **`CONTEXT-MAP.md`** at the repo root if it exists — it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
 - **`docs/adr/`** — read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.
+If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The grilling sessions — `build-factory` context mode (the project-context bootstrap) and `/grill-with-docs` (per-story design) — create them when terms or decisions actually get resolved.
 
 ## File structure
 
@@ -37,6 +37,19 @@ Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
         ├── CONTEXT.md
         └── docs/adr/
 ```
+
+## Read, don't write
+
+`CONTEXT.md` and the ADRs have a **single kind of writer: the grilling session** — both
+`build-factory` context mode (the project-context bootstrap) and `/grill-with-docs` (per-story
+design). That's the point of grilling: externalizing business context and technical decisions
+into one deliberate step. Implementation, triage, and review **read** them; they never amend them.
+
+When implementation discovers that an ADR is wrong or incomplete (a mechanism measured broken, a
+decision that didn't survive contact), record the discovery **in the ticket/PR** — with the
+measurements. The doc amendment happens in the next grilling session, which folds it into the ADR
+body properly (see the `grill-with-docs` skill's `ADR-FORMAT.md`). Shipping an ADR edit inside an
+implementation PR is how implementation post-mortems end up bloating the decision record.
 
 ## Use the glossary's vocabulary
 
