@@ -7,50 +7,58 @@ Une **usine logicielle agentique** : un process clair et un outillage précis po
 concentre en **conception** ; les agents prennent en charge l'essentiel de l'implémentation,
 sous supervision d'un expert.
 
-PDSF est un jeu de **skills** Claude Code (commandes `/…`) + un skill d'amorçage
-(`/build-factory`) qui adapte le tout à ton projet. On l'installe **dans ton dépôt**, on ne
-forke pas celui-ci.
+PDSF est un jeu de **skills** (commandes `/…`) + un skill d'amorçage (`/build-factory`) qui
+adapte le tout à ton projet. On l'installe **dans ton dépôt**, on ne forke pas celui-ci. Les
+skills sont écrits **par capacités, pas pour un harness nommé** : ils tournent là où « slash
+charge un prompt markdown en contexte » existe — Claude Code, Copilot, Cursor.
 
-## Par où commencer
+## Installation
 
-Deux canaux d'installation, depuis ce dépôt GitHub public.
+L'installation de référence est un **bootstrap `curl … | sh`** first-party, sans dépendance. Il :
 
-**Canal A — `npx skills`** (copie les skills dans le `.claude/skills/` de ton projet ;
-commité, partagé avec l'équipe ; recommandé pour démarrer) :
+- installe **tous** les skills (pas de sélection à la carte) ;
+- demande le **harness** cible et y émet les skills — Claude Code → `.claude/skills/`,
+  Copilot → `.github/prompts/` — puis câble `CLAUDE.md` / `AGENTS.md` ;
+- demande si le dépôt est un **monorepo** (voir ci-dessous) ;
+- passe la main à **`/build-factory`**.
 
-```bash
-# dans ton projet (existant ou neuf) — cible Claude Code pour écrire dans .claude/skills/
-npx skills add Loulen/prompt-driven-software-factory -a claude-code
-```
+> Les invocations exactes (URL du bootstrap, flags, pré-requis) vivent dans
+> **[`docs/INSTALL.md`](docs/INSTALL.md)** — les détails d'installation.
 
-> Garde **`-a claude-code`** : c'est ce qui **copie** les skills dans `.claude/skills/` (le
-> dossier que Claude Code lit). Sans ce flag, l'outil peut cibler plusieurs agents et écrire
-> dans `.agents/skills/` — invisible pour Claude Code sans un symlink
-> `.claude/skills -> ../.agents/skills`.
+**Monorepo.** Chaque **contexte métier** reçoit une **factory** autonome dans
+`.factory/<contexte>/` : sa propre copie des skills, plus les docs de domaine du contexte
+(`CONTEXT.md`, `docs/adr/`, `docs/agents/`). Les sous-projets membres y sont reliés par des
+**symlinks relatifs, un par skill**, dans leur `.claude/skills/` ; **rien n'est chargé à la
+racine** du monorepo — ouvrir la racine ne tire aucun contexte en mémoire. Le seul artefact
+partagé est `.factory/pdsf-install.sh`, l'outil résident **re-jouable** qui crée une factory ou y
+rattache un sous-projet (ADR-0003).
 
-Puis, dans le projet : **`/build-factory`**.
+**Autres canaux.** Escape hatches, documentés dans [`docs/INSTALL.md`](docs/INSTALL.md) :
 
-**Canal B — plugin Claude Code** (disponible dans tous tes projets, versionné, updatable) :
-
-```text
-/plugin marketplace add Loulen/prompt-driven-software-factory
-/plugin install pdsf@prompt-driven-software-factory
-```
-
-En mode plugin, les skills sont **préfixés** : `/pdsf:build-factory`, `/pdsf:grill-with-docs`,
-etc. (le canal A les laisse sans préfixe : `/build-factory`).
+| Canal | Quand |
+| --- | --- |
+| `npx skills` | Un harness vers lequel le bootstrap n'émet pas encore. Copie les skills dans `.claude/skills/` ; dépend de Node. |
+| Plugin Claude Code | Disponible dans tous tes projets, versionné et updatable. Les skills sont alors **préfixés** : `/pdsf:build-factory`, `/pdsf:grill-with-docs`, etc. |
 
 ### Ensuite : `/build-factory`
 
-Il te guide pas à pas : il câble les **deux backlogs** (métier et technique), le vocabulaire
-de **triage** et les **docs de domaine** pour ce dépôt, scaffolde `CLAUDE.md`, `CONTEXT.md` et
-`docs/adr/`, puis t'oriente vers l'étape qui porte tout le reste : la **conception** (une
-session de *grilling* avec `/grill-with-docs`). `/build-factory` câble le *workflow*, jamais la
-stack technique : les agents découvrent les outils de build/test au runtime.
+`build-factory` est le point d'entrée, avec **deux modes** que le skill choisit selon l'état du
+dépôt :
 
-Le skill fonctionne aussi bien sur un **projet existant** (le grilling reconstruit alors
-`CONTEXT.md` et les ADR depuis le code : prévoir une demi-journée) que sur un projet
-**from-scratch** (un pitch dégrossi sert à amorcer les fichiers de contexte).
+- **scaffold** — câble les **deux backlogs** (métier et technique), le vocabulaire de **triage**
+  et les **docs de domaine**, puis pose `CLAUDE.md`, un `CONTEXT.md` vide et `docs/adr/` ;
+- **context** — le bootstrap de projet : remplit le glossaire de `CONTEXT.md` et les ADR
+  fondateurs (c'est le **premier grilling** du projet), en réutilisant les skills de support
+  `grilling` et `domain-modeling`.
+
+Il câble le *workflow*, jamais la stack technique : les agents découvrent les outils de
+build/test au runtime. Le mode context marche aussi bien sur un **projet existant** (le grilling
+reconstruit `CONTEXT.md` et les ADR depuis le code : prévoir une demi-journée) que **from-scratch**
+(un pitch dégrossi amorce les fichiers de contexte).
+
+À tout moment, **`/verify-factory`** rejoue un **health check** : sources externes joignables,
+driver agentique qui se lance, labels de triage, scaffold et context présents, santé git-flow. Il
+rapporte, propose de corriger ce qui manque, et signale l'étape suivante — **sans jamais bloquer**.
 
 ## Pourquoi cette usine ?
 
@@ -80,10 +88,10 @@ passer du backlog métier au backlog technique. C'est une conception détaillée
 s'étaler sur plusieurs heures selon le scope (on s'appuie beaucoup sur le grilling, voir plus
 bas).
 
-De cette conception sortent des tâches **porteuses du contexte et des décisions techniques**
+De cette conception sortent des **tickets** **porteurs du contexte et des décisions techniques**
 nécessaires à leur réalisation. Un agent peut alors s'en occuper de façon principalement
-autonome : il lit le backlog, sélectionne la tâche autosuffisante, l'implémente, la teste, et
-la présente à validation finale. La plupart des interventions humaines ont été résolues en
+autonome : il lit le backlog, sélectionne le ticket autosuffisant, l'implémente, le teste, et
+le présente à validation finale. La plupart des interventions humaines ont été résolues en
 amont, en conception. L'humain supervise en tant qu'**expert** (*expert in the loop*).
 
 On obtient une nouvelle manière de fonctionner, qui optimise la construction de solutions
@@ -96,20 +104,35 @@ Le flux (schéma en tête de page) va du besoin au déploiement :
 
 **Comprendre le besoin -> Concevoir -> Planifier -> Implémenter -> Tester -> Valider -> Déployer**
 
-- **Backlog métier** (US 1, 2, 3, 4) : on choisit un ensemble d'US à implémenter.
-- **Conception** : `/grill-with-docs` aligne la vision, produit `Context.md` et les `ADR` ;
-  `/to-prd` puis `/to-issues` découpent en **backlog technique** (PRD + issues). N issues
-  métier ≠ N issues techniques.
-- **Cycle de dev** : certaines issues sont parallélisables. Chaque issue passe par `/tdd`
-  puis `/agentic_tests` dans une **boucle de validation**, jusqu'à la branche d'intégration.
-- **Fin de cycle** : l'humain teste, valide, crée la MR, merge et nettoie.
+En commandes, la chaîne se lit :
+
+```text
+/to-us → /grill-with-docs → /to-spec → /to-tickets → /implement (/tdd + /code-review + /agentic-tests) → /git-flow
+        \_________________ mise en place : /build-factory · santé : /verify-factory _________________/
+```
+
+- **Amont métier** : `/to-us` transforme une feature en **User Stories** métier prêtes à prendre
+  (front PO). On choisit ensuite un ensemble d'US à implémenter.
+- **Conception** : `/grill-with-docs` aligne vision métier et technique et met à jour `CONTEXT.md`
+  et les ADR au fil des décisions ; `/to-spec` synthétise la **spec** sur le backlog technique,
+  que `/to-tickets` découpe en **tickets** en **tranches verticales**, chacun porteur de son
+  *Feature Path*. N US métier ≠ N tickets techniques.
+- **Cycle de dev** : `/implement` orchestre **trois rôles** — `/tdd`, un `/code-review`
+  **indépendant** et `/agentic-tests` — en boucle jusqu'à ce que build + tests + *Feature Path*
+  soient au vert, sans finding bloquant. Certains tickets sont parallélisables.
+- **Branches & merges** : `/git-flow` porte le modèle de branches (`integration/*`, auto-merge des
+  sous-tickets sur *Feature Path* vert, merges `develop` / `main` humains).
 
 Trois bandes de responsabilité se superposent au flux :
 
 - **AGENT** : porte le cœur du cycle de dev (implémentation + tests).
 - **DEV** : *expert in the loop* sur toute la conception et la validation.
-- **PO** : amont (besoin, backlog métier) et aval (validation) ; intervention possible mais
-  d'appoint pendant le dev.
+- **PO** : amont (besoin, backlog métier via `/to-us`) et aval (validation) ; intervention
+  possible mais d'appoint pendant le dev.
+
+> **Guidé, pas verrouillé.** L'usine te garde **orienté** plutôt qu'elle n'impose son pipeline :
+> consciente de la phase courante, elle signale toujours l'étape suivante, sans jamais bloquer. Le
+> chemin conforme est rendu **évident**, jamais **obligatoire** (ADR-0001).
 
 ## Conception : la phase de « grill »
 
@@ -122,10 +145,13 @@ projet existant.
 - **`/grill-with-docs`** : l'agent lit `CONTEXT.md` et les ADR, puis pose des questions une à
   une, résout chaque branche de l'arbre de décision, et **met à jour `CONTEXT.md` et les ADR
   au fil de l'eau**. On en sort une **vision partagée du besoin**. `CONTEXT.md` est le
-  glossaire du domaine (et rien d'autre) ; les ADR tracent les décisions structurantes.
-- **`/to-issues`** : crée des **issues autoporteuses** du contexte technique et métier. C'est
-  le second backlog, purement technique, **par et pour les agents**, avec pour objectif une
-  implémentation principalement réalisée par des agents.
+  glossaire du domaine (et rien d'autre) ; les ADR tracent les décisions structurantes. Les
+  sessions de grilling — celle-ci et le mode context de `/build-factory` — sont les **seules à
+  écrire** `CONTEXT.md` et les ADR.
+- **`/to-spec`** puis **`/to-tickets`** : la spec synthétisée est découpée en **tickets
+  autoporteurs** du contexte technique et métier. C'est le second backlog, purement technique,
+  **par et pour les agents**, avec pour objectif une implémentation principalement réalisée par
+  des agents.
 
 C'est l'étape qui porte tout le reste : un agent autonome ne vaut que par la qualité du
 contexte qu'on lui donne. C'est pourquoi `/build-factory` insiste autant sur le grilling.
@@ -134,16 +160,24 @@ contexte qu'on lui donne. C'est pourquoi `/build-factory` insiste autant sur le 
 
 ![Implémentation — TDD et pyramide des tests](docs/assets/04-implementation-tests.png)
 
-Une issue est implémentée dans une **boucle de validation** entre deux compétences que
-l'orchestration enchaîne : produire le code, puis valider l'app réelle.
+Un ticket est implémenté par `/implement`, qui enchaîne **trois rôles** dans une **boucle de
+validation** jusqu'au vert :
 
-- **`/tdd`** — Red / Green / Refactor sur les **niveaux 1 à 4** de la pyramide (unitaires,
-  contrat, intégration, composants). Software craftmanship : on teste pour la qualité et la
-  maintenabilité, et les tests survivent aux refactors car ils décrivent le comportement, pas
-  l'implémentation.
-- **`/agentic-tests`** — un **nouveau niveau au sommet** de la pyramide : des tests effectués
-  par des agents en conditions réelles d'utilisation (pilotage du navigateur principalement),
-  *Happy Path* + *Feature Path*. Ça permet d'**économiser** du temps de QA, pas de l'éviter.
+- **`/tdd`** — Red / Green aux seams convenus, sur les **niveaux 1 à 4** de la pyramide (unitaires,
+  contrat, intégration, composants) ; le refactoring relève de l'étape de revue, pas de la boucle
+  red → green. Software craftmanship : on teste pour la qualité et la maintenabilité, et les tests
+  survivent aux refactors car ils décrivent le comportement, pas l'implémentation.
+- **`/code-review`** — un relecteur **indépendant**, à deux axes : **Standards** (le code
+  respecte-t-il les règles documentées du repo ?) et **Spec** (fait-il ce que le ticket
+  demandait ?).
+- **`/agentic-tests`** — un **nouveau niveau au sommet** de la pyramide : un subagent pilote le
+  **système réel qui tourne** par sa **surface primaire** (UI, CLI via tmux, ou warehouse pour
+  un pipeline data), la couche **QA au-dessus des tests end-to-end**. Il joue le *Feature Path*
+  (par défaut) ou les *Happy Paths*. Ça permet d'**économiser** du temps de QA, pas de l'éviter.
+
+La boucle tourne jusqu'à ce que **build + tests + Feature Path** soient au vert, sans finding
+bloquant. Là où les subagents ne sont pas disponibles, `/implement` dégrade en séquentiel
+(`/tdd → /code-review → /agentic-tests`).
 
 ![Implémentation — enjeux](docs/assets/03-implementation-enjeux.png)
 
@@ -160,35 +194,64 @@ Les enjeux derrière ces choix :
 
 ## Les skills
 
+**Commandes du pipeline** (invoquées par l'humain, `/…`) :
+
 | Skill | Rôle dans l'usine |
 | --- | --- |
-| **`build-factory`** | Point d'entrée. Câble les deux backlogs, le triage et les docs de domaine ; scaffolde `CLAUDE.md` / `CONTEXT.md` / `docs/adr/` ; amorce la conception. |
-| **`grill-with-docs`** | Session de *grilling* : aligne la vision, met à jour `CONTEXT.md` et les ADR au fil des décisions. |
-| **`to-prd`** | Synthétise le contexte en un PRD publié sur le backlog technique. |
-| **`to-issues`** | Découpe un plan/PRD en issues autoporteuses (tracer bullets), chacune avec son *Feature Path*. |
-| **`triage`** | Fait passer les issues par une machine à états (`needs-triage`, `ready-for-agent`, …) ; prépare les briefs d'agent. |
-| **`tdd`** | Red / Green / Refactor sur les niveaux inférieurs de la pyramide. |
-| **`agentic-tests`** | Runner des tests agentiques (HP / FP) : un subagent valide l'app réelle qui tourne, UI d'abord. |
-| **`git-flow`** | Modèle de branches et gates de merge (`integration/*`, auto-merge des sous-issues, merges `develop`/`main` humains). |
+| **`to-us`** | Front PO. Transforme une feature en **User Stories** métier via un grilling de PO senior, puis publie après revue humaine. En amont de la conception. |
+| **`grill-with-docs`** | Grilling **par US** : confronte le plan au modèle de domaine, affine le vocabulaire, écrit `CONTEXT.md` / ADR au fil des décisions. |
+| **`to-spec`** | Synthétise la conversation en une **spec** publiée sur le backlog technique (pas d'interview, juste synthèse). |
+| **`to-tickets`** | Découpe la spec en **tickets** en tranches verticales, chacun déclarant ses arêtes bloquantes et son *Feature Path*. |
+| **`implement`** | Orchestre `/tdd`, un `/code-review` indépendant et `/agentic-tests` en boucle jusqu'au vert (build + tests + *Feature Path*), sans finding bloquant. |
+| **`triage`** | Fait passer issues (et PR externes) par une machine à états ; rédige les briefs d'agent. |
+
+**Commandes de setup / santé** (invoquées par l'humain) :
+
+| Skill | Rôle dans l'usine |
+| --- | --- |
+| **`build-factory`** | Point d'entrée. Deux modes — **scaffold** (câble backlogs, triage, domaine ; pose `CLAUDE.md` / `CONTEXT.md` / `docs/adr/`) et **context** (bootstrap du glossaire + ADR fondateurs). Détecte l'état et propose le bon mode. |
+| **`verify-factory`** | Health check re-jouable — sources externes joignables, driver agentique, scaffold/context, santé git-flow. Rapporte, propose de corriger, signale l'étape suivante ; **ne bloque jamais**. |
+
+**Skills de support** (invoqués par les commandes, model-invoked) :
+
+| Skill | Rôle dans l'usine |
+| --- | --- |
+| **`grilling`** | Le moteur de *grilling* : questionne une décision à la fois jusqu'à compréhension partagée. Réutilisé par les sessions de conception. |
+| **`domain-modeling`** | Construit et affine le **modèle de domaine** quand une session écrit `CONTEXT.md`, un ADR, ou résout du vocabulaire. |
+| **`code-review`** | Revue à deux axes — **Standards** et **Spec** — y compris comme relecteur indépendant dans `/implement`. |
+| **`codebase-design`** | Vocabulaire partagé pour concevoir des **modules profonds** (interfaces, seams, testabilité, navigabilité). |
+| **`tdd`** | Red / Green sur les niveaux bas de la pyramide, aux seams convenus (le refactoring relève de la revue). |
+| **`agentic-tests`** | Pilote le **système réel qui tourne** par sa **surface primaire** (UI / CLI via tmux / warehouse), la couche QA au-dessus des tests end-to-end ; joue *Feature Path* ou *Happy Paths*. |
+| **`git-flow`** | Modèle de branches et gates de merge (`integration/*`, auto-merge des sous-tickets, merges `develop` / `main` humains) ; check de position avant dev. |
 
 ## Structure du dépôt
 
 ```
-prompt-driven-software-factory/
-├── README.md                      ← ce fichier (méthode + genèse)
-├── .claude-plugin/
-│   ├── marketplace.json           ← catalogue (canal plugin)
-│   └── plugin.json                ← manifeste du plugin « pdsf »
-├── skills/
-│   ├── build-factory/             ← amorçage (+ seed-templates docs/agents)
-│   ├── grill-with-docs/           ← conception (+ CONTEXT-FORMAT, ADR-FORMAT)
-│   ├── to-prd/
-│   ├── to-issues/
-│   ├── tdd/                       ← (+ tests, mocking, refactoring, deep-modules…)
-│   ├── agentic-tests/             ← (+ SCENARIO-FORMAT)
-│   ├── triage/                    ← (+ AGENT-BRIEF, OUT-OF-SCOPE)
-│   └── git-flow/
-└── docs/assets/                   ← schémas de la méthode
+prompt-driven-factory/
+├── README.md                       ← ce fichier (méthode + genèse)
+├── CONTEXT.md                      ← glossaire de l'usine (langage de référence)
+├── docs/
+│   ├── adr/                        ← décisions structurantes (ADR-0001…0004)
+│   ├── agents/                     ← config backlogs / triage / domaine
+│   ├── test-scenarios/             ← Happy Paths (≤ 3)
+│   └── assets/                     ← schémas de la méthode
+├── .claude-plugin/                 ← canal plugin (marketplace.json, plugin.json)
+└── skills/
+    ├── build-factory/              ← amorçage (backlogs, triage, issue-tracker-{github,gitlab,local}…)
+    ├── verify-factory/             ← health check
+    ├── to-us/                      ← front PO (+ US-FORMAT)
+    ├── grill-with-docs/            ← conception par US (compose grilling + domain-modeling)
+    ├── to-spec/                    ← synthèse de la spec
+    ├── to-tickets/                 ← découpe en tickets (tranches verticales)
+    ├── implement/                  ← boucle tdd + code-review + agentic-tests
+    ├── triage/                     ← (+ AGENT-BRIEF, OUT-OF-SCOPE)
+    ├── grilling/                   ← moteur de grilling
+    ├── domain-modeling/            ← modèle de domaine (+ CONTEXT-FORMAT, ADR-FORMAT)
+    ├── code-review/                ← revue à deux axes
+    ├── codebase-design/            ← modules profonds (+ DEEPENING, DESIGN-IT-TWICE)
+    ├── tdd/                        ← (+ tests, mocking)
+    ├── agentic-tests/              ← (+ SCENARIO-FORMAT)
+    └── git-flow/
 ```
 
 Ce dépôt est une **source d'installation**, pas un projet à faire tourner. C'est `/build-factory`,
@@ -197,7 +260,8 @@ triage / domaine), `CONTEXT.md` et `docs/adr/`.
 
 ## Crédits
 
-Plusieurs skills d'ingénierie (`grill-with-docs`, `to-prd`, `to-issues`, `triage`, `tdd`)
-dérivent des [skills de Matt Pocock](https://github.com/mattpocock/skills), adaptés et
-généralisés pour cette usine. La méthode et son outillage ont été assemblés chez **Ippon
-Technologies**.
+Plusieurs skills d'ingénierie (`grill-with-docs`, `to-spec`, `to-tickets`, `implement`,
+`code-review`, `codebase-design`, `domain-modeling`, `grilling`, `triage`, `tdd`) dérivent des
+[skills de Matt Pocock](https://github.com/mattpocock/skills), adaptés et généralisés pour cette
+usine ; `agentic-tests` et l'orchestration de l'usine (`to-us`, `build-factory`, `verify-factory`)
+lui sont propres. La méthode et son outillage ont été assemblés chez **Ippon Technologies**.
