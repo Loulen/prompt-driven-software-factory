@@ -12,28 +12,62 @@ L'installation de référence est un **bootstrap first-party, sans dépendance**
 les skills (pas de sélection à la carte), demande le harness cible et l'éventuel mode monorepo, puis
 passe la main à `/build-factory`.
 
+Le script est **`install.sh`**, à la racine du dépôt. Une fois une URL de bootstrap publiée, la
+commande figée sera :
+
 ```sh
-curl -fsSL <URL-du-bootstrap> | sh
+curl -fsSL <URL-du-bootstrap> | sh          # URL renseignée à la publication
 ```
 
-> **URL et flags exacts** : renseignés par le ticket d'outillage d'installation (le script
-> `install.sh` / `.factory/pdsf-install.sh`). Tant que ce ticket n'est pas livré, cette section
-> décrit le comportement visé, pas encore la commande figée.
+En attendant, on l'exécute depuis un checkout local — c'est **la** commande concrète aujourd'hui :
+
+```sh
+sh install.sh [DOSSIER_CIBLE]               # défaut : le dossier courant
+sh install.sh --help                        # options + contrat de variables
+```
 
 Le bootstrap :
 
-1. **Résout la source des skills** — un dépôt cloné en `--depth 1`, une archive, ou un chemin local
-   via la variable `PDSF_SRC` (sert aussi aux tests hors-ligne).
-2. **Demande le harness** et y émet les skills :
-   - Claude Code → `.claude/skills/`
-   - Copilot → `.github/prompts/`
-   - puis câble `CLAUDE.md` et/ou `AGENTS.md`.
+1. **Résout la source des skills** — un dépôt cloné en `git --depth 1`, une archive `curl`, ou un
+   checkout local via `PDSF_SRC` (voir [Mode hors-ligne](#mode-hors-ligne)).
+2. **Demande le harness** et y émet **tous** les skills (énumérés depuis `skills/*/`, jamais codés
+   en dur) :
+   - Claude Code → `.claude/skills/<skill>/`
+   - Copilot → `.github/prompts/<skill>.prompt.md`
+   - puis câble le fichier d'agent (`CLAUDE.md` pour Claude, `AGENTS.md` sinon) via un bloc marqué
+     `<!-- PDSF:BEGIN -->…<!-- PDSF:END -->` — **ré-exécutable**, jamais dupliqué.
 3. **Demande si le dépôt est un monorepo** (voir ci-dessous).
 4. **Passe la main à `/build-factory`**.
 
-Les prompts acceptent des **valeurs par défaut via variables d'environnement**
-(`PDSF_HARNESS`, `PDSF_MONOREPO`, `PDSF_CONTEXT`, …) pour un usage non-interactif ; l'exécution
-interactive reste le chemin nominal.
+Il n'installe **jamais** dans le dépôt source PDSF lui-même : il refuse et réclame un dossier cible.
+
+### Contrat de variables d'environnement
+
+Chaque prompt a un équivalent `PDSF_*`. Une variable **définie** (même vide) répond à la question
+sans l'afficher — c'est ainsi qu'un run **non-interactif** est piloté ; laissée **absente**, la
+question est posée sur `/dev/tty` (chemin **interactif** nominal).
+
+| Variable | Sens | Défaut |
+| --- | --- | --- |
+| `PDSF_SRC` | Checkout PDSF local d'où installer (`skills/`, `CONTEXT.md`, `docs/`). Force le mode **hors-ligne**. | (fetch réseau) |
+| `PDSF_HARNESS` | `claude` (→ `.claude/skills/`) ou `copilot` (→ `.github/prompts/`). | `claude` |
+| `PDSF_MONOREPO` | `y`/`n` — installer une factory autonome par contexte (`.factory/<ctx>/`) ? | `n` |
+| `PDSF_CONTEXT` | Monorepo : nom du contexte / de la factory. | (demandé) |
+| `PDSF_MEMBERS` | Monorepo : sous-dossiers membres à câbler, séparés par espace ou virgule. Vide = aucun. | (demandé) |
+| `PDSF_ACTION` | Outil résident : `create` (ou `1`) / `wire` (ou `2`). | `create` |
+| `PDSF_AGENTFILE` | Force le fichier d'agent câblé. | `CLAUDE.md` / `AGENTS.md` |
+| `PDSF_REPO`, `PDSF_TARBALL` | Sources de fetch alternatives quand `PDSF_SRC` est absent. | dépôt public |
+
+### Mode hors-ligne
+
+`PDSF_SRC=<checkout>` fait tourner l'installeur **sans réseau** : aucun clone, aucun téléchargement,
+il copie depuis le checkout indiqué. C'est aussi le **seam de test** de la suite agentique. Exemple
+d'un run non-interactif complet, mono-projet, dans un dossier cible :
+
+```sh
+PDSF_SRC=/chemin/vers/pdsf PDSF_HARNESS=claude PDSF_MONOREPO=n \
+  sh install.sh /chemin/vers/mon-projet
+```
 
 ## Monorepo
 
@@ -46,10 +80,21 @@ Sur `monorepo = oui`, chaque **contexte métier** devient une **factory autonome
   `.claude/skills/`, plus un pointeur relatif depuis leur `AGENTS.md` (`CLAUDE.md` → `AGENTS.md`) ;
 - **rien n'est chargé à la racine** du monorepo.
 
-Le seul artefact partagé est **`.factory/pdsf-install.sh`** — le même code que le bootstrap, second
-point d'entrée résident et **re-jouable**. Il crée une factory (nommée par l'utilisateur) ou rattache
-un ou plusieurs sous-dossiers à une factory sélectionnée ; il découvre les factories existantes en
-listant `.factory/*/` (pas de fichier de registre).
+Le seul artefact partagé est **`.factory/pdsf-install.sh`** — une **copie octet-pour-octet** de
+`install.sh`, écrite par le bootstrap lors du premier passage en monorepo (source unique : on ne
+maintient jamais deux corps de script). Second point d'entrée résident et **re-jouable**, il se
+détecte lui-même via son emplacement sous `.factory/`. On l'invoque depuis la racine du monorepo :
+
+```sh
+.factory/pdsf-install.sh                     # menu : créer une factory / câbler des sous-dossiers
+# non-interactif :
+PDSF_ACTION=wire PDSF_CONTEXT=<ctx> PDSF_MEMBERS="apps/api" .factory/pdsf-install.sh
+```
+
+Il crée une factory (nommée par l'utilisateur) ou rattache un ou plusieurs sous-dossiers à une
+factory sélectionnée ; il découvre les factories existantes en listant `.factory/*/` (pas de fichier
+de registre). Une factory créée par l'outil résident réutilise les skills d'une factory existante
+comme gabarit — pas besoin de réseau.
 
 **Anti-absence silencieuse** : les symlinks sont **relatifs** (ils survivent à un re-clone), et
 `.factory/` ne doit **jamais** être exclu en sparse-checkout. Windows sans symlinks reste une
