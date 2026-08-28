@@ -24,7 +24,14 @@ A self-contained, agent-grabbable unit of technical work on the technical backlo
 **Grilling**:
 A design session that resolves decisions one at a time and writes them down — the project-context
 bootstrap (`build-factory` context mode) and per-story design (`grill-with-docs`). The grilling
-sessions are the **only writers** of `CONTEXT.md` and the ADRs; every other flow only reads them.
+sessions are the only writers that **add or amend** `CONTEXT.md` and the ADRs; `/clean-context`
+prunes them (ADR-0005); every other flow only reads them.
+
+**Named counterfactual**:
+The gate a context text (ADR, glossary sentence, code comment) must pass to be written or kept:
+name the wrong-but-plausible action X an agent would take without it, uncaught by compiler, tests,
+or a reading of the code. Defined in `domain-modeling`'s `ADR-FORMAT.md`; enforced retroactively
+by `/clean-context`.
 
 **Spec**:
 The synthesised requirements document produced by `/to-spec` on the technical backlog, bridging

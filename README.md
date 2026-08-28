@@ -186,6 +186,7 @@ Les enjeux derrière ces choix :
 | **`to-tickets`** | Découpe la spec en **tickets** en tranches verticales, chacun déclarant ses arêtes bloquantes et son *Feature Path*. |
 | **`implement`** | Orchestre `/tdd`, un `/code-review` indépendant et `/agentic-tests` en boucle jusqu'au vert (build + tests + *Feature Path*), sans finding bloquant. |
 | **`triage`** | Fait passer issues (et PR externes) par une machine à états ; rédige les briefs d'agent. |
+| **`clean-context`** | Refacto ponctuel : purge le contexte accumulé (`CONTEXT.md`, ADR, commentaires de code) selon la règle du **contrefactuel nommé** ; supprime et resserre, n'ajoute jamais ; branche + PR dédiées (ADR-0005). |
 
 **Commandes de setup / santé** (invoquées par l'humain) :
 
@@ -213,7 +214,7 @@ prompt-driven-factory/
 ├── README.md                       ← ce fichier (méthode + genèse)
 ├── CONTEXT.md                      ← glossaire de l'usine (langage de référence)
 ├── docs/
-│   ├── adr/                        ← décisions structurantes (ADR-0001…0004)
+│   ├── adr/                        ← décisions structurantes (ADR-0001…0005)
 │   ├── agents/                     ← config backlogs / triage / domaine
 │   ├── test-scenarios/             ← Happy Paths (≤ 3)
 │   └── assets/                     ← schémas de la méthode
@@ -227,6 +228,7 @@ prompt-driven-factory/
     ├── to-tickets/                 ← découpe en tickets (tranches verticales)
     ├── implement/                  ← boucle tdd + code-review + agentic-tests
     ├── triage/                     ← (+ AGENT-BRIEF, OUT-OF-SCOPE)
+    ├── clean-context/              ← purge du contexte accumulé (contrefactuel nommé)
     ├── grilling/                   ← moteur de grilling
     ├── domain-modeling/            ← modèle de domaine (+ CONTEXT-FORMAT, ADR-FORMAT)
     ├── code-review/                ← revue à deux axes
