@@ -23,8 +23,9 @@ it **never publishes a User Story without an explicit human go-ahead** (§3).
   session produces are what *become* referenceable. So `/to-us` does not open an
   `integration/<business-ref>-…` branch (that's the per-story grilling's job, later).
 - **Read the context, don't write it.** `/to-us` **reads** `CONTEXT.md` and the ADRs to ground the PO
-  grilling; it is not a writer of them. Per ADR-0004 the only writers are the two grilling sessions
-  (`/build-factory` context mode and `/grill-with-docs`). If the PO grilling exposes a genuine gap or
+  grilling; it is not a writer of them. Per ADR-0004 the only writers that add are the two grilling
+  sessions (`/build-factory` context mode and `/grill-with-docs`; `/clean-context` only prunes,
+  ADR-0005). If the PO grilling exposes a genuine gap or
   ambiguity in the **business glossary**, surface it and route it to a grilling session — don't amend
   `CONTEXT.md` here.
 

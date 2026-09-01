@@ -9,7 +9,10 @@ Create the `docs/adr/` directory lazily — only when the first ADR is needed.
 ```md
 # {Short title of the decision}
 
-{1-3 sentences: what's the context, what did we decide, and why.}
+{First sentence: the named counterfactual — "Without this, a competent agent would X." See
+*When to offer an ADR* below.}
+{1-3 sentences: what did we decide, and why.}
+{If a measurement killed an alternative, the measurement.}
 ```
 
 That's it. An ADR can be a single paragraph. The value is in recording *that* a decision was made and *why* — not in filling out sections.
@@ -32,7 +35,7 @@ An ADR records the decision and its why. The implementation lives elsewhere — 
 
 What *does* belong even when it looks technical: the measurements that killed an alternative ("we tried X on the real data; it failed on the exact case it was meant to save"). No amount of code reading will ever reveal those — they are the treasure an ADR exists to keep.
 
-**Size smell**: past ~100 lines, an ADR is almost certainly absorbing the implementation plan. Cut before committing.
+**Size budget**: the decision, its counterfactual, and the measurements that killed the alternatives usually fit in ~30 lines. Past ~100, an ADR is almost certainly absorbing the implementation plan. Cut before committing.
 
 ## Amending an ADR
 
@@ -46,17 +49,37 @@ When a later decision revises an existing ADR:
 
 Scan `docs/adr/` for the highest existing number and increment by one.
 
-## When to offer an ADR
+## When to offer an ADR: the named counterfactual
 
-All three of these must be true:
+Before writing, produce this sentence:
 
-1. **Hard to reverse** — the cost of changing your mind later is meaningful
-2. **Surprising without context** — a future reader will look at the code and wonder "why on earth did they do it this way?"
-3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons
+> "Without this text, a competent agent would do X — and neither the compiler, the tests, nor a
+> reading of the code would stop them."
 
-If a decision is easy to reverse, skip it — you'll just reverse it. If it's not surprising, nobody will wonder why. If there was no real alternative, there's nothing to record beyond "we did the obvious thing."
+1. **Name X.** A concrete, plausible action ("they would unpin the dependency below the CVE
+   floor", "they would 'simplify' the live reference into a copy"). If no X can be named, there
+   is nothing to record.
+2. **Check that X gets through.** If X fails to compile, breaks a test, or is visible from a
+   plain reading of the code, the repo defends itself — skip the ADR. Agents read code; anything
+   derivable from it is noise billed to every future session that loads the context.
+3. **The counterfactual is part of the text.** It is the ADR's first sentence. A text whose
+   counterfactual can no longer be reconstructed gets deleted (the `clean-context` skill enforces
+   this retroactively).
 
-A deliberate deviation **scoped to a single code site** is better served by a code comment at that site than by an ADR: the constraint sits exactly where the next editor would undo it, with zero drift. Reserve ADRs for decisions that constrain work beyond one site.
+The older three-part test (hard to reverse / surprising / real trade-off) follows from this rule
+but doesn't replace it: those three are qualities the author self-grades right after investing in
+the decision, when everything feels surprising. The counterfactual is one falsifiable sentence
+someone else can challenge — "no, X is caught by a test", "no, nobody would plausibly do X".
+
+**Placement follows X's blast radius.** X committed at a single code site → a code comment at
+that site, never an ADR (the constraint sits exactly where the next editor would undo it, with
+zero drift). X committed across several sites or in a future design → an ADR. X committed by an
+agent doing generic work far from the feature → one sentence in `CONTEXT.md` plus a pointer.
+
+**Provenance is never content.** Mentally strip the issue numbers, the dates, the "we used to",
+the "fixed by". If nothing remains that forbids or forces a future action, don't write it: git
+owns history. A pointer (`#268`) attached to a surviving constraint is fine; a pointer that
+carries the whole text is not.
 
 ### What qualifies
 

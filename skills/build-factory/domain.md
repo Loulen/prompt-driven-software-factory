@@ -40,10 +40,14 @@ Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
 
 ## Read, don't write
 
-`CONTEXT.md` and the ADRs have a **single kind of writer: the grilling session** — both
+`CONTEXT.md` and the ADRs have a **single kind of writer that adds: the grilling session** — both
 `build-factory` context mode (the project-context bootstrap) and `/grill-with-docs` (per-story
 design). That's the point of grilling: externalizing business context and technical decisions
 into one deliberate step. Implementation, triage, and review **read** them; they never amend them.
+
+The one other sanctioned writer is **`/clean-context`** — the occasional pruning refactor. It
+deletes and tightens (domain docs *and* code comments) under the named-counterfactual rule, on its
+own branch through a human-merged PR; it never adds or amends a decision (ADR-0005).
 
 When implementation discovers that an ADR is wrong or incomplete (a mechanism measured broken, a
 decision that didn't survive contact), record the discovery **in the ticket/PR** — with the

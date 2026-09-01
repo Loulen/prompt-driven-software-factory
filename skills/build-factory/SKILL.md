@@ -243,8 +243,9 @@ Reuse the support skills rather than re-inventing the interview:
 - **`domain-modeling`** — extract the domain terms, actors, and relationships that seed the
   glossary.
 
-The context bootstrap is a **writer** of `CONTEXT.md` and the ADRs (the only writers are the two
-grilling sessions — this mode and `/grill-with-docs`; see `domain.md`, *Read, don't write*). Write
+The context bootstrap is a **writer** of `CONTEXT.md` and the ADRs (the only writers that add are
+the two grilling sessions — this mode and `/grill-with-docs`; `/clean-context` only prunes; see
+`domain.md`, *Read, don't write*). Write
 inline as decisions crystallise — never batch. `CONTEXT.md` stays a glossary + product intent;
 implementation detail belongs in an ADR or a ticket. Formats: the `domain-modeling` skill's
 `CONTEXT-FORMAT.md` and `ADR-FORMAT.md`.

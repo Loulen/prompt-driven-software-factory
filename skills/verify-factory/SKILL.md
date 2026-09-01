@@ -75,8 +75,9 @@ scaffolded:
 - At least the foundational **ADRs** exist under `docs/adr/` (more than an empty directory).
 
 Empty `CONTEXT.md` or no ADRs → **signpost `/build-factory` context mode** (the project-context
-bootstrap grilling). The grilling sessions are the only writers of `CONTEXT.md`/ADRs, so
-`/verify-factory` never fills them itself — it points at the skill that does.
+bootstrap grilling). The grilling sessions are the only writers that fill `CONTEXT.md`/ADRs
+(`/clean-context` only prunes), so `/verify-factory` never fills them itself — it points at the
+skill that does.
 
 ## 4. Technical backlog — list and create
 

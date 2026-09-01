@@ -7,7 +7,7 @@ description: Actively build and sharpen a project's domain model. Use when a gri
 
 Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
-`CONTEXT.md` and the ADRs are written **only** in a grilling session — `build-factory` context mode (the project-context bootstrap) or `grill-with-docs` (per story). Those are their only writers; every other flow reads them. This skill is how a grilling session does that writing.
+`CONTEXT.md` and the ADRs are written **only** in a grilling session — `build-factory` context mode (the project-context bootstrap) or `grill-with-docs` (per story). Those are the only writers that add or amend; `/clean-context` prunes (deletes and tightens, never adds — ADR-0005); every other flow reads them. This skill is how a grilling session does that writing.
 
 ## File structure
 
@@ -65,12 +65,13 @@ When a term is resolved, update `CONTEXT.md` right there. Don't batch these up �
 
 `CONTEXT.md` should be totally devoid of implementation details — never a spec, a scratch pad, a changelog, or a home for implementation decisions. It is a glossary and nothing else; an entry that needs the full contract points to the ADR that fixed it rather than inlining it.
 
-### Offer ADRs sparingly
+### Offer ADRs against the named counterfactual
 
-Only offer to create an ADR when all three are true:
+Only offer to create an ADR when you can produce its counterfactual: "without this text, a
+competent agent would do X — and neither the compiler, the tests, nor a reading of the code would
+stop them", with X a concrete, plausible action. No nameable X, or an X the repo already catches:
+skip the ADR. If X is scoped to a single code site, offer a code comment at that site instead.
 
-1. **Hard to reverse** — the cost of changing your mind later is meaningful
-2. **Surprising without context** — a future reader will wonder "why did they do it this way?"
-3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons
-
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md) — which captures the decision, its why, and the measurements that killed the alternatives, never the implementation plan.
+Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md) — the counterfactual is the ADR's first
+sentence, followed by the decision, its why, and the measurements that killed the alternatives,
+never the implementation plan.

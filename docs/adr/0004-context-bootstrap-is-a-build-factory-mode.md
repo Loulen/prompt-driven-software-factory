@@ -1,5 +1,7 @@
 # The project-context bootstrap is a build-factory mode, not a grilling session
 
+> Amended by ADR-0005: `/clean-context` is a third, prune-only writer of `CONTEXT.md`/ADRs.
+
 `build-factory` has **two modes**:
 
 - **Scaffold** — wire the backlogs, triage, and domain, and lay down `CLAUDE.md`, an empty
