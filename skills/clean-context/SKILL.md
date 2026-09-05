@@ -1,7 +1,6 @@
 ---
 name: clean-context
 description: Prune the project's accumulated context by the factory : CONTEXT.md, the ADRs, and code comments. A heavy, occasional refactor on its own branch and PR. Use on "clean the context", "prune the docs/ADRs/comments", or when the domain docs have visibly bloated.
-disable-model-invocation: true
 ---
 
 # Clean Context

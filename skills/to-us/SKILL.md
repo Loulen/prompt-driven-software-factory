@@ -1,7 +1,6 @@
 ---
 name: to-us
 description: Turns a feature or idea into business User Stories on the business backlog. Runs a senior-PO grilling — the grilling method guided by the existing CONTEXT.md glossary — writes each retained slice to the US template, and publishes backend-agnostically after a mandatory human review. The PO front of the pipeline, upstream of design. Run it when you want to shape a feature into ready-to-pick User Stories.
-disable-model-invocation: true
 ---
 
 # /to-us

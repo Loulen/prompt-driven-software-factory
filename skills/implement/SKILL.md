@@ -1,7 +1,6 @@
 ---
 name: implement
 description: Implement a spec or set of tickets by orchestrating a tdd role, an independent code-review role, and an agentic-tests role in a loop until build, tests, and the Feature Path are green with no blocking finding.
-disable-model-invocation: true
 ---
 
 # Implement
