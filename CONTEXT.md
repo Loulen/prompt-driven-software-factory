@@ -85,14 +85,31 @@ domain, and loads nothing at the monorepo root.
 ### Onboarding
 
 **Tutorial**:
-The guided walkthrough that teaches a newcomer to install PDSF, build a factory and use it, on a
-throwaway **tutorial workspace** seeded from the **tutorial fixture**. It ships with PDSF but is
-not a skill a factory installs. See ADR-0006.
-_Avoid_: tour (PDO's word for its in-app walkthroughs), demo
+The guided walkthrough that teaches a newcomer to install PDSF and build a factory (then, as an
+optional bonus, ship a first feature with it), on a throwaway **tutorial workspace** seeded from the
+**tutorial fixture**. One path, ~10 minutes, zero tokens. It ships with PDSF but is not a skill a
+factory installs. See ADR-0006.
+_Avoid_: tour (PDO's word for its in-app walkthroughs), demo, tutorial mode (retired: there is one path)
 
-**Tutorial mode**:
-One way of playing the same tutorial scenario: **narrated replay**, **simulated session** (a
-stand-in harness), or **real agent**. The first two are simulated; the third spends tokens.
+**Simulated harness**:
+The tutorial's stand-in for an agent harness (Claude Code look-alike): a prompt, `/help`, slash
+commands, arrow-key choices, file diffs. It replays **simulated steps**; it never calls a model. It
+is hosted inside the tutorial app next to a **tutorial shell**, so typing `claude` in the tutorial
+never launches the learner's real agent.
+
+**Tutorial shell**:
+The tutorial app's fake shell prompt where the learner types the real deterministic commands
+(`curl … install.sh | sh`, `code .`, `claude`); those commands run for real on the workspace.
+
+**Coach**:
+The tutorial's one-voice guide: at most two lines per step and one call to action. Every step is
+either a **do** step (the learner types a command or a prompt) or a **read** step (the learner reads
+the coach's line, then moves on).
+
+**Tutorial playground**:
+A proof-of-concept browser surface for the same tutorial: a static, IDE-like page (file explorer,
+git graph, simulated terminal) playing the same scenario and recordings in memory. Being compared
+with the terminal tutorial; not the default.
 
 **Simulated step**:
 A tutorial step whose agent work is replayed from a recording of a real run — zero tokens, known
