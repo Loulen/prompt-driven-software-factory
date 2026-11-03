@@ -296,6 +296,45 @@ The resolved PDSF source is removed when `tutorial.sh` exits (when it was fetche
 needs files after its run copies them into the workspace. That is how the real-agent mode's guide
 skill gets **only** into the workspace, never into `skills/` (ADR-0006).
 
+## Shipped modes
+
+| Id | Folder | What it does |
+| --- | --- | --- |
+| `a1` | [`modes/a1-narrated-replay/`](modes/a1-narrated-replay/mode.md) | **Narrated replay**. Zero tokens: the learner reads along; deterministic steps run for real, agent steps replay a recorded real run, flagged SIMULATED. |
+| `b` | [`modes/b-real-agent/`](modes/b-real-agent/mode.md) | **Real agent**. Copies the guide skill `pdsf-tutorial` into the workspace (only there), then the learner starts their own harness and types `/pdsf-tutorial`. The guide follows the scenario, has the learner run the real PDSF skills, and runs each step's check. Spends tokens. |
+
+## Mode B from a shared PDO instance (optional)
+
+For a facilitator whose participants have no harness subscription of their own. **This is
+optional**: PDSF and mode B need no PDO, and nothing in PDO is specific to the tutorial. The
+recipe only uses what any PDO instance already has, an interactive run on a project.
+
+For each participant, on the PDO host:
+
+1. Create a fresh workspace in mode B, non-interactively:
+
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh |
+     PDSF_TUTO_DIR=~/tutorial/alice PDSF_TUTO_HARNESS=claude PDSF_TUTO_MODE=b \
+     PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n PDSF_TUTO_PAUSE=n sh
+   ```
+
+2. PDO runs each session in a git worktree of the project, and a worktree only holds committed
+   files. So commit the guide (it is git-excluded by default), and free `develop` so the session
+   can land the context there:
+
+   ```sh
+   cd ~/tutorial/alice
+   git add -f .agents/skills/pdsf-tutorial && git commit -qm "Tutorial guide (pdsf-tutorial)"
+   git checkout -q --detach
+   ```
+
+3. Add the workspace as a PDO project. Start an **interactive** run on it from any pipeline with a
+   single interactive agent node, with the prompt `/pdsf-tutorial`. The participant then follows
+   the guide from that run's terminal, exactly as in their own harness.
+
+One workspace and one run per participant. Workspaces are throwaway: delete them after the session.
+
 ## Libraries (`lib/scenario.sh`, `lib/recording.sh`)
 
 Source it after exporting `PDSF_TUTO_ROOT`:

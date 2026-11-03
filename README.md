@@ -60,6 +60,11 @@ Hors-ligne depuis un checkout, lancé du dossier qui recevra l'espace de travail
 `PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails, modes et variables `PDSF_TUTO_*` :
 **[`tutorial/README.md`](tutorial/README.md)** (en anglais).
 
+En mode **vrai agent** (B), le script copie un skill guide, `pdsf-tutorial`, dans l'espace de travail
+uniquement (jamais par `install.sh`). Tu lances ensuite ton harness et tapes `/pdsf-tutorial` : le
+guide te fait lancer les vrais skills PDSF étape par étape et vérifie chaque résultat. Ce mode
+consomme des tokens.
+
 ## Pourquoi cette usine ?
 
 Depuis quelque temps, les outils qui accompagnent notre développement évoluent, voire sont

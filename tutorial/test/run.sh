@@ -173,6 +173,101 @@ assert_out "$TMP/mode-x.log" "unknown tutorial mode 'zz'"
 assert "an empty PDSF_TUTO_MODE stops after the setup" test ! -e "$TMP/ws-mode-e/.played"
 assert_out "$TMP/mode-e.log" "No mode chosen"
 
+# ---------------------------------------------------------------------------- mode B: real agent
+
+t "mode B (real agent) is shipped: it copies the guide skill into the workspace, and only there"
+tuto ws-b "$TMP/b.log" PDSF_TUTO_MODE=b PDSF_TUTO_SKIP_CH3=y
+assert "tutorial exits 0" test $? -eq 0
+WS="$TMP/ws-b"; G="$WS/.agents/skills/pdsf-tutorial"
+assert_out "$TMP/b.log" "Real agent  (b)"
+assert_out "$TMP/b.log" "✓ the install is committed"
+assert "the guide skill is in .agents/skills/" test -f "$G/SKILL.md"
+assert "it is the pdsf-tutorial skill" test "$(sed -n 's/^name: //p' "$G/SKILL.md")" = pdsf-tutorial
+assert "the Claude layout sees it through .claude/skills" test -f "$WS/.claude/skills/pdsf-tutorial/SKILL.md"
+assert "its lesson plan comes with it" sh -c "[ -f '$G/tuto.sh' ] && [ -f '$G/lib/scenario.sh' ] && [ -f '$G/scenario/01-build-the-factory/02-scaffold/check.sh' ]"
+assert "no recording comes with it (nothing is replayed)" test -z "$(find "$G/scenario" -name recording)"
+assert "the guide is git-excluded: the working tree stays clean" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
+assert "the guide is not committed" test -z "$(git -C "$WS" ls-files .agents/skills/pdsf-tutorial)"
+assert "the learner stays on develop" test "$(git -C "$WS" symbolic-ref --short HEAD)" = develop
+assert "the learner's answers are kept for the guide" sh -c "grep -qx PDSF_TUTO_SKIP_CH3=y '$G/tutorial.env' && grep -qx PDSF_TUTO_SKIP_CH2=n '$G/tutorial.env' && grep -qx PDSF_TUTO_HARNESS=claude '$G/tutorial.env'"
+assert "the rest of .agents/skills is exactly what install.sh installed" test "$(ls "$WS/.agents/skills" | grep -vx pdsf-tutorial | tr '\n' ' ')" = "$(ls "$REPO/skills" | tr '\n' ' ')"
+assert_out "$TMP/b.log" "cd $WS"
+assert_out "$TMP/b.log" "     claude"
+assert_out "$TMP/b.log" "/pdsf-tutorial"
+assert_out "$TMP/b.log" "Read .agents/skills/pdsf-tutorial/SKILL.md and follow it."
+assert_out "$TMP/b.log" "Skipped chapter(s): 3."
+assert_out "$TMP/b.log" "Where to look next"
+assert "the guide's source lives in the tutorial, not under skills/" sh -c "[ -z \"\$(find '$REPO/skills' -name 'pdsf-tutorial*')\" ] && [ -f '$REPO/tutorial/modes/b-real-agent/pdsf-tutorial/SKILL.md' ]"
+
+t "mode B with the generic layout"
+tuto ws-b-generic "$TMP/b-generic.log" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=b
+assert "tutorial exits 0" test $? -eq 0
+assert "the guide is in .agents/skills/" test -f "$TMP/ws-b-generic/.agents/skills/pdsf-tutorial/SKILL.md"
+assert "no .claude overlay" test ! -e "$TMP/ws-b-generic/.claude"
+assert_not "no claude command suggested" grep -qx '     claude' "$TMP/b-generic.log"
+assert_out "$TMP/b-generic.log" "Read .agents/skills/pdsf-tutorial/SKILL.md and follow it."
+
+t "the guide's tuto.sh: plan, next, show, action, check, skip"
+GT="sh $G/tuto.sh"
+$GT plan >"$TMP/plan.log" 2>&1
+assert "plan runs" test $? -eq 0
+assert_out "$TMP/plan.log" "[x] 01-build-the-factory/01-install"
+assert_out "$TMP/plan.log" "[ ] 01-build-the-factory/02-scaffold"
+assert_out "$TMP/plan.log" "Chapter 3 — Go further  (skipped)"
+assert "plan lists every step" test "$(grep -c '^  \[' "$TMP/plan.log")" -eq "$(find "$REPO/tutorial/scenario" -name step.md | wc -l | tr -d ' ')"
+assert "next is the scaffold" test "$($GT next)" = 01-build-the-factory/02-scaffold
+$GT show 1.2 >"$TMP/show.log" 2>&1
+assert_out "$TMP/show.log" "# Scaffold the factory"
+assert_out "$TMP/show.log" "Command: /build-factory"
+assert_out "$TMP/show.log" "## What you do"
+assert_out "$TMP/show.log" "## Under the hood"
+assert "a full step id works too" sh -c "$GT show 02-use-the-factory/04-implement | grep -qF 'Command: /implement'"
+assert_not "an unknown step is refused" $GT show 9.9
+$GT action 2.1 >"$TMP/b-action.log" 2>&1
+assert_out "$TMP/b-action.log" "Belt US-1 [user] Submit my belt for sensei validation"
+assert_not "the scaffold check fails before the agent ran" $GT check 1.2
+assert "a failed check is not recorded" test "$($GT next)" = 01-build-the-factory/02-scaffold
+mkdir -p "$WS/docs/agents" "$WS/docs/adr"
+printf 'Tool: markdown, under business-backlog/\n' >"$WS/docs/agents/business-backlog.md"
+printf 'Tickets live in .scratch/\n' >"$WS/docs/agents/issue-tracker.md"
+for _p in triage-labels domain us-format; do printf 'x\n' >"$WS/docs/agents/$_p.md"; done
+printf '\n## Agent skills\n' >>"$WS/AGENTS.md"
+printf '# CONTEXT\n' >"$WS/CONTEXT.md"
+assert "the scaffold check passes once scaffolded, from any directory" sh -c "cd '$WS/src' && $GT check 1.2"
+assert "a passed check is recorded: next is the context" test "$($GT next)" = 01-build-the-factory/03-context
+assert_not "the context check fails on a stub CONTEXT.md" $GT check 1.3
+assert "the chapter text is shown" sh -c "$GT chapter 2 | grep -qF 'Chapter 2 — Use the factory'"
+assert_not "chapter 1 cannot be skipped" $GT skip 1 y
+assert "chapter 2 can be skipped" $GT skip 2 y
+assert "a skipped chapter shows in the plan" sh -c "$GT plan | grep -qF 'Chapter 2 — Use the factory  (skipped)'"
+assert "and un-skipped" sh -c "$GT skip 2 n && ! $GT plan | grep -qF 'Chapter 2 — Use the factory  (skipped)'"
+assert_not "the guide's files never show in git status" sh -c "git -C '$WS' status --porcelain | grep -q pdsf-tutorial"
+
+t "the guide keeps working once the fetched PDSF source is gone"
+SRC=$(fake_src gone)
+cp -R "$REPO/tutorial/modes/." "$SRC/tutorial/modes/"
+( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-b-gone PDSF_TUTO_PAUSE=n PDSF_TUTO_MODE=b PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y sh "$SRC/tutorial/tutorial.sh" ) </dev/null >/dev/null 2>&1
+rm -rf "$SRC"
+GG="$TMP/ws-b-gone/.agents/skills/pdsf-tutorial"
+assert "plan still runs" sh "$GG/tuto.sh" plan
+assert "the install is recorded as done" sh -c "sh '$GG/tuto.sh' plan | grep -qF '[x] 01-build-the-factory/01-install'"
+assert_not "checks still run (and judge the workspace)" sh "$GG/tuto.sh" check 1.3
+assert "chapters 2 and 3 are skipped in the plan" sh -c "[ \"\$(sh '$GG/tuto.sh' plan | grep -c '(skipped)')\" -eq 2 ]"
+
+t "the guide skill: portable, and it covers every agent step"
+GS="$REPO/tutorial/modes/b-real-agent/pdsf-tutorial/SKILL.md"
+assert_not "no harness-specific tool or output style" grep -qiE 'AskUserQuestion|TodoWrite|output.style|Skill tool|subagent_type|Claude Code' "$GS"
+for _s in "$REPO"/tutorial/scenario/*/*/step.md; do
+  _d=${_s%/step.md}
+  [ "$(sed -n 's/^kind: //p' "$_s")" = agent ] || continue
+  _id="${_d%/*}"; _id="${_id##*/}/${_d##*/}"
+  assert "the guide has hints for $_id" grep -qF "$_id" "$GS"
+done
+assert "the guide quotes the check's ✓/✗ lines verbatim" grep -qF 'quote its ✓/✗ lines verbatim' "$GS"
+assert "the guide says the install is committed on main, develop created from it" grep -qF 'committed the install on **`main`**' "$GS"
+assert "the PDO recipe is documented, as optional" grep -qF '## Mode B from a shared PDO instance (optional)' "$REPO/tutorial/README.md"
+assert "the mode documents its guide" grep -qF 'tuto.sh' "$REPO/tutorial/modes/b-real-agent/mode.md"
+
 # ---------------------------------------------------------------------------- scenario
 
 t "the scenario: 3 chapters, every step with English learner text and a check"
