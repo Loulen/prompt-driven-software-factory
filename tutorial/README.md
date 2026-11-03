@@ -31,7 +31,9 @@ Needs `sh`, `git`, and Node 18+ (the fixture's tests run with plain `node --test
 4. **Offers the tutorial modes**: only the ones actually shipped under `modes/`. With none shipped,
    it says so and exits cleanly (status 0) after the setup. Shipped: **A1, narrated replay**
    (`modes/a1-narrated-replay/`, zero tokens: agent steps replayed from a recorded real run,
-   flagged `SIMULATED`).
+   flagged `SIMULATED`), **A2, simulated session** (`modes/a2-simulated-session/`, zero tokens:
+   the learner types `claude` and the real commands in a sub-shell where a stand-in `claude`
+   replays the same recordings) and **B, real agent** (`modes/b-real-agent/`, spends tokens).
 5. Plays the chosen mode, then ends on **where to look next**.
 
 Three chapters:
@@ -51,11 +53,14 @@ tutorial/
 ├── lib/
 │   ├── scenario.sh             ← scenario + modes library, sourced by tutorial.sh and every mode
 │   ├── recording.sh            ← reads and replays the recordings (simulated modes, recorder)
+│   ├── replay.sh               ← what the simulated modes show: step text, SIMULATED frame, git changes
 │   └── check.sh                ← helpers for step checks
 ├── fixture/blackbelt-lite/     ← copied verbatim into the workspace
 ├── scenario/                   ← the lesson plan every mode plays, with its recordings (contract below)
 ├── modes/                      ← one folder per shipped tutorial mode (contract below)
-│   └── a1-narrated-replay/     ← mode A1: narrated replay
+│   ├── a1-narrated-replay/     ← mode A1: narrated replay
+│   ├── a2-simulated-session/   ← mode A2: simulated session (its stand-in claude: stand-in.sh)
+│   └── b-real-agent/           ← mode B: real agent (its guide skill: pdsf-tutorial/)
 ├── record/                     ← the recorder: (re-)records the agent steps from a real run
 └── test/run.sh                 ← the test suite
 ```
@@ -85,8 +90,9 @@ Set by the entry script for steps and modes (not for the learner to set):
 | `PDSF_TUTO_ROOT` | `$PDSF_TUTO_SRC/tutorial`. |
 | `PDSF_TUTO_WORKSPACE` | The workspace, absolute path. |
 
-A mode that needs more answers (e.g. the simulated session's recorded choices) adds its own
-`PDSF_TUTO_*` variable under the same set/unset rule and documents it in its `mode.md`.
+A mode that needs more answers adds its own `PDSF_TUTO_*` variable under the same set/unset rule
+and documents it in its `mode.md` (e.g. the simulated session's `PDSF_TUTO_A2_SESSION`, a script that
+types for the learner, and `PDSF_TUTO_A2_LEFT`).
 
 ## Scenario contract
 
@@ -278,8 +284,8 @@ A shipped mode is a folder `modes/<id>-<slug>/` holding:
 - `play.sh`, the mode's entry point.
 
 A folder without both files is not shipped and is not offered. The menu lists shipped modes in
-folder-name order. Planned ids: `a1` (narrated replay, **shipped**), `a2` (simulated session), `b`
-(real agent).
+folder-name order. Ids: `a1` (narrated replay), `a2` (simulated session), `b` (real agent), all
+shipped.
 
 `tutorial.sh` runs `sh modes/<id>-<slug>/play.sh` **after the setup**:
 
@@ -301,6 +307,7 @@ skill gets **only** into the workspace, never into `skills/` (ADR-0006).
 | Id | Folder | What it does |
 | --- | --- | --- |
 | `a1` | [`modes/a1-narrated-replay/`](modes/a1-narrated-replay/mode.md) | **Narrated replay**. Zero tokens: the learner reads along; deterministic steps run for real, agent steps replay a recorded real run, flagged SIMULATED. |
+| `a2` | [`modes/a2-simulated-session/`](modes/a2-simulated-session/mode.md) | **Simulated session**. Zero tokens, real gestures: for each chapter's agent steps, a sub-shell opens in the workspace with a stand-in `claude` first on its PATH (and only there). The learner types `claude`, the real slash commands, and answers the recorded questions as numbered choices (default = the recorded answer; an off-script answer is accepted and flagged). The stand-in writes the recorded files as A1 does, so the workspace ends in A1's state. Leaving the sub-shell runs the checks. Driven non-interactively by `PDSF_TUTO_A2_SESSION` / `PDSF_TUTO_A2_LEFT`. |
 | `b` | [`modes/b-real-agent/`](modes/b-real-agent/mode.md) | **Real agent**. Copies the guide skill `pdsf-tutorial` into the workspace (only there), then the learner starts their own harness and types `/pdsf-tutorial`. The guide follows the scenario, has the learner run the real PDSF skills, and runs each step's check. Spends tokens. |
 
 ## Mode B from a shared PDO instance (optional)
@@ -335,7 +342,7 @@ For each participant, on the PDO host:
 
 One workspace and one run per participant. Workspaces are throwaway: delete them after the session.
 
-## Libraries (`lib/scenario.sh`, `lib/recording.sh`)
+## Libraries (`lib/scenario.sh`, `lib/recording.sh`, `lib/replay.sh`)
 
 Source it after exporting `PDSF_TUTO_ROOT`:
 
@@ -362,6 +369,17 @@ Source it after exporting `PDSF_TUTO_ROOT`:
 | `rec_files STEP` | The recorded files, workspace-relative |
 | `rec_apply STEP` | Replay the recorded end state onto the workspace (see § The replay) |
 | `rec_git ARGS…` | git in the workspace, with a fallback identity |
+
+`lib/replay.sh` (source it after `lib/recording.sh`): what the simulated modes (A1, A2 and its
+stand-in) show, written once so they look alike and keep within the terminal's width.
+
+| Function | Does |
+| --- | --- |
+| `rp_step_intro STEP NUM TAG [LEAD]`, `rp_step_tag STEP` | The step's header (title, tag, the command to type), then What you do and Under the hood |
+| `rp_step_action STEP`, `rp_step_check STEP` | The action, run for real, its output wrapped; the check, run for real, stopping the mode when it fails |
+| `rp_replay STEP` | The narrated replay of an agent step (mode A1): the recorded session in a SIMULATED frame, the files applied, what changed |
+| `sim_open` / `sim_close` / `sim_say` / `sim_note` / `sim_turn` | The SIMULATED frame and the turns inside it |
+| `rp_close_and_apply STEP`, `rp_changes BEFORE FROM` | Close the frame and `rec_apply`; what changed, from real git output |
 
 ## The fixture: `blackbelt-lite`
 
@@ -398,4 +416,11 @@ The suite plays `tutorial.sh` against this checkout (`PDSF_SRC`) in temp dirs an
   `SIMULATED`, and the workspace ends with both local backlogs, `CONTEXT.md` + ADRs on `develop`,
   the Belt US-1 tickets, and the submission rule implemented with `node --test` green. Also: the
   generic layout with chapters 2–3 skipped, and a failing check stopping the mode;
+- **mode A2 played non-interactively on every chapter** (the recorded path), with the same fake
+  `claude`, which must never be called: every check passes, and the workspace ends in **exactly
+  A1's state** (same branches, same trees, same commit messages). Also: a scripted session
+  (`PDSF_TUTO_A2_SESSION`) with an off-script answer (flagged, the recorded path continues), an
+  unknown command and an out-of-order one (answered with the available commands), a step left
+  halfway then resumed, steps left unplayed (replayed for the learner, or stopping the mode); the
+  stand-in on `PATH` only inside the session; a failing check stopping the mode;
 - the recorder, against a fake agent (turns, `--resume`, choices, files, `run`).

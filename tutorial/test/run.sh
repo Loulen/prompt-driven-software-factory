@@ -497,8 +497,10 @@ mkdir -p "$TMP/bin"
 printf '#!/bin/sh\necho "$*" >> "%s/claude-called"\nexit 1\n' "$TMP" >"$TMP/bin/claude"
 chmod +x "$TMP/bin/claude"
 
-t "mode A1 is in the menu"
+t "the menu offers the three modes: A1, A2, B"
 assert_out "$TMP/claude.log" "[1] Narrated replay  (a1)"
+assert_out "$TMP/claude.log" "[2] Simulated session  (a2)"
+assert_out "$TMP/claude.log" "[3] Real agent  (b)"
 
 t "mode A1, non-interactive, every chapter: every step and every check pass, zero tokens"
 tuto ws-a1 "$TMP/a1.log" PATH="$TMP/bin:$PATH" COLUMNS=80 PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
@@ -561,6 +563,122 @@ rm "$SRC/tutorial/scenario/01-build-the-factory/03-context/recording/files/CONTE
 assert_not "the tutorial fails" test $? -eq 0
 assert_out "$TMP/a1-broken.log" "the check of 01-build-the-factory/03-context failed"
 assert_not "it does not go on to the next step" grep -q 'Step 1.4' "$TMP/a1-broken.log"
+
+# ---------------------------------------------------------------------------- mode A2
+
+# ws_state WS -> what makes a workspace's state: every branch with its tree, every commit message.
+ws_state() {
+  git -C "$1" for-each-ref --format='%(refname:short) %(tree)' refs/heads
+  git -C "$1" log --all --format='%s %T' | LC_ALL=C sort
+}
+
+t "mode A2, non-interactive (the recorded path), every chapter: every check passes, A1's end state, zero tokens"
+tuto ws-a2 "$TMP/a2.log" PATH="$TMP/bin:$PATH" COLUMNS=80 PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
+assert "the tutorial exits 0" test $? -eq 0
+sed -n '/^──── Mode A2/,$p' "$TMP/a2.log" | grep -v '^  \$ curl ' >"$TMP/a2-mode.log"
+assert "every line of the mode fits an 80-column terminal" test "$(max_width "$TMP/a2-mode.log")" -le 80
+assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
+assert_out "$TMP/a2.log" "12 steps played, every check green; 7 of them in the simulated session, 0"
+assert_out "$TMP/a2.log" "replayed for you, 0 off-script answer(s) (0 tokens)."
+assert "no check failed" sh -c "! grep -q '✗' '$TMP/a2.log'"
+assert "one session per chapter with agent steps" test "$(grep -c '^┌─ SIMULATED SESSION ─ a sub-shell in your workspace' "$TMP/a2.log")" -eq 2
+assert "every session returns to the tutorial" test "$(grep -c '^└─ SIMULATED SESSION ─ back in the tutorial' "$TMP/a2.log")" -eq 2
+assert "the learner types claude in each session" test "$(grep -c '^\$ claude$' "$TMP/a2.log")" -eq 2
+assert_out "$TMP/a2.log" "✻ claude — SIMULATED stand-in, PDSF tutorial"
+assert "every agent step is replayed in a SIMULATED frame" test "$(grep -c '^  ┌─ SIMULATED ─ replay of a real' "$TMP/a2.log")" -eq 7
+assert "every SIMULATED frame is closed" test "$(grep -c '^  └─ SIMULATED ─' "$TMP/a2.log")" -eq 7
+for _cmd in "> /build-factory" "> /verify-factory" "> /grill-with-docs" "> /to-spec" "> /to-tickets" "> /implement" "> /exit"; do
+  assert_out "$TMP/a2.log" "$_cmd"
+done
+assert "every step says what you do and what happens under the hood" sh -c "[ \"\$(grep -c '^What you do' '$TMP/a2.log')\" -eq 12 ] && [ \"\$(grep -c '^Under the hood' '$TMP/a2.log')\" -eq 12 ]"
+assert_out "$TMP/a2.log" "Your answer — Enter for 1, the recorded one; another number; or your own"
+assert_out "$TMP/a2.log" "  1) Keep the local markdown folder business-backlog/: one story per file,"
+assert_out "$TMP/a2.log" "  2) Jira"
+assert_out "$TMP/a2.log" "Belt US-1 [user] Submit my belt for sensei validation"
+assert_out "$TMP/a2.log" "What changed in your workspace (real git output):"
+assert_out "$TMP/a2.log" "Chapter 2: the checks of the session's steps"
+assert_out "$TMP/a2.log" "Where to look next"
+assert "the workspace ends in exactly A1's state" test "$(ws_state "$TMP/ws-a2")" = "$(ws_state "$TMP/ws-a1")"
+assert "the same branch is checked out" test "$(git -C "$TMP/ws-a2" symbolic-ref --short HEAD)" = "$(git -C "$TMP/ws-a1" symbolic-ref --short HEAD)"
+assert "the workspace is clean at the end" sh -c "[ -z \"\$(git -C '$TMP/ws-a2' status --porcelain)\" ]"
+assert "chapter 2: node --test is green" sh -c "cd '$TMP/ws-a2' && node --test"
+assert_not "no stand-in left in the workspace" sh -c "find '$TMP/ws-a2' -name stand-in.sh | grep -q ."
+
+t "mode A2, scripted session: off-script answers, unknown commands, a step left and resumed, steps replayed for the learner"
+cat >"$TMP/a2-session.sh" <<EOS
+command -v claude >>"$TMP/a2-which"
+if [ "\$PDSF_TUTO_A2_CHAPTER" = 1 ]; then
+  printf '%s\n' /foo /verify-factory hello /help /build-factory 2 '' 'Our own words' '' '' /build-factory 3 /exit | claude
+  claude /build-factory </dev/null
+  printf '%s\n' /build-factory '' '' '' /build-factory /exit | claude
+else
+  printf '%s\n' /grill-with-docs '' '' /exit | claude
+  printf '%s\n' /to-spec '' '' | claude
+fi
+EOS
+tuto ws-a2-script "$TMP/a2-script.log" PATH="$TMP/bin:$PATH" COLUMNS=110 PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_A2_SESSION="$TMP/a2-session.sh"
+assert "the tutorial exits 0" test $? -eq 0
+L="$TMP/a2-script.log"
+assert "the session ran once per chapter" test "$(grep -c . "$TMP/a2-which")" -eq 2
+assert "in the session, claude is the stand-in" sh -c "grep -v '^$TMP/bin/claude\$' '$TMP/a2-which' | grep -q '/bin/claude\$'"
+assert "the stand-in is gone after the tutorial" sh -c "[ ! -e \"\$(head -n 1 '$TMP/a2-which')\" ]"
+assert "the learner's own claude was never called" test ! -e "$TMP/claude-called"
+assert_out "$L" "simulated session: not recorded — no recording of /foo at this point of the tutorial"
+assert_out "$L" "simulated session: not recorded — /verify-factory is recorded for a later step (1.4): play this one first"
+assert_out "$L" "simulated session: not recorded — the stand-in only replays the recorded commands"
+assert_out "$L" "Available at this step (1.2, Scaffold the factory):"
+assert_out "$L" "claude (simulated stand-in) — what you can type"
+assert "a numbered choice is taken" grep -qF 'you › Jira' "$L"
+assert "free text is taken" grep -qF 'you › Our own words' "$L"
+assert "off-script answers are flagged" test "$(grep -c '⚑ off-script — simulated: a real agent would adapt, the recorded path continues.' "$L")" -eq 3
+assert_out "$L" "The recorded answer was: Keep the local markdown folder business-backlog/"
+assert_out "$L" "session left before the end of the step: nothing applied"
+assert_out "$L" "Step 1.3 is not played yet: type \`claude\` to come back to it"
+assert_out "$L" "> /build-factory"
+assert_out "$L" "simulated session: not recorded — /build-factory was already played (step 1.3)"
+assert_out "$L" "Recorded as: /grill-with-docs business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
+assert_out "$L" "In the recorded run, this command was typed in the same session as the previous step."
+assert_out "$L" "Not played in the session yet:"
+assert_out "$L" "  step 1.4  /verify-factory  — Check the factory's health"
+assert "steps left are replayed for the learner (no terminal)" test "$(grep -c '^Replayed for you, as in mode A1' "$L")" -eq 3
+assert "the summary counts the session's steps, the replayed ones and the off-script answers" sh -c "tr '\n' ' ' <'$L' | grep -qF '8 steps played, every check green; 4 of them in the simulated session, 3 replayed for you, 2 off-script answer(s) (0 tokens).'"
+assert_out "$L" "  01-build-the-factory/02-scaffold turn 3: Jira"
+assert_out "$L" "  01-build-the-factory/02-scaffold turn 7: Our own words"
+assert_not "an abandoned step's answers are not counted" grep -qF '03-context turn' "$L"
+assert "off-script answers change nothing: A1's state" test "$(ws_state "$TMP/ws-a2-script")" = "$(ws_state "$TMP/ws-a1")"
+assert "no check failed" sh -c "! grep -q '✗' '$L'"
+
+t "mode A2: steps left unplayed and PDSF_TUTO_A2_LEFT=q stop the tutorial"
+printf 'true\n' >"$TMP/a2-idle.sh"
+tuto ws-a2-quit "$TMP/a2-quit.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_A2_SESSION="$TMP/a2-idle.sh" PDSF_TUTO_A2_LEFT=q
+assert_not "the tutorial fails" test $? -eq 0
+assert_out "$TMP/a2-quit.log" "stopped with step(s) left unplayed"
+assert "nothing was applied" test ! -e "$TMP/ws-a2-quit/docs/agents"
+
+t "mode A2 with the generic layout, chapters 2 and 3 skipped, PDSF_TUTO_A2_SESSION empty (the recorded path)"
+tuto ws-a2-generic "$TMP/a2-generic.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_A2_SESSION=
+assert "the tutorial exits 0" test $? -eq 0
+assert_out "$TMP/a2-generic.log" "4 steps played, every check green; 3 of them in the simulated session, 0 replayed for you"
+assert_out "$TMP/a2-generic.log" "Skipping Chapter 2"
+assert_out "$TMP/a2-generic.log" "Skipping Chapter 3"
+assert "chapter 1's state is reached" sh -c "cd '$TMP/ws-a2-generic' && git show develop:CONTEXT.md | grep -q Belt && [ ! -e CLAUDE.md ]"
+assert "the same state as A1 on that layout" test "$(ws_state "$TMP/ws-a2-generic")" = "$(ws_state "$TMP/ws-a1-generic")"
+assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
+
+t "mode A2 stops on a failing step check"
+SRC=$(fake_src a2-broken)
+cp -R "$REPO/tutorial/modes/." "$SRC/tutorial/modes/"
+rm "$SRC/tutorial/scenario/01-build-the-factory/03-context/recording/files/CONTEXT.md"
+( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-a2-broken PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/a2-broken.log" 2>&1
+assert_not "the tutorial fails" test $? -eq 0
+assert_out "$TMP/a2-broken.log" "the check of 01-build-the-factory/03-context failed"
+assert_not "it does not report success" grep -q 'Simulated session complete' "$TMP/a2-broken.log"
+
+t "the stand-in only runs inside the tutorial's session"
+( cd "$TMP" && env -u PDSF_TUTO_A2_STATE PDSF_TUTO_ROOT="$REPO/tutorial" PDSF_TUTO_WORKSPACE="$TMP/ws-a2" sh "$REPO/tutorial/modes/a2-simulated-session/stand-in.sh" ) </dev/null >"$TMP/a2-outside.log" 2>&1
+assert_not "it refuses to run without the mode's state" test $? -eq 0
+assert_out "$TMP/a2-outside.log" "the stand-in claude only runs in the tutorial sub-shell"
+assert_not "the tutorial never installs a claude command" sh -c "find '$TMP/ws-a2' '$TMP/ws-a2-script' -name claude -type f | grep -q ."
 
 # ---------------------------------------------------------------------------- recorder
 

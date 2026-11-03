@@ -56,6 +56,13 @@ Mode **replay narré** (A1) : zéro token, rien à installer. Les étapes de l'a
 depuis l'enregistrement d'un vrai run des skills, et signalées `SIMULATED` ; le reste (install,
 git, tests, vérifications) tourne pour de vrai.
 
+Mode **session simulée** (A2) : zéro token aussi, mais tu fais les vrais gestes. Dans un sous-shell
+de l'espace de travail, tu tapes `claude`, puis les vraies commandes slash, et tu réponds aux
+questions de l'agent. Ce `claude` est une doublure, présente seulement dans ce sous-shell (ton vrai
+`claude` n'est pas touché) : elle rejoue les mêmes enregistrements, propose les réponses en choix
+numérotés (Entrée = la réponse enregistrée) et signale toute réponse hors script. L'état final est
+le même qu'en A1.
+
 Hors-ligne depuis un checkout, lancé du dossier qui recevra l'espace de travail (hors du checkout) :
 `PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails, modes et variables `PDSF_TUTO_*` :
 **[`tutorial/README.md`](tutorial/README.md)** (en anglais).
