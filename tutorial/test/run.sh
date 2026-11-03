@@ -263,6 +263,8 @@ for _s in "$REPO"/tutorial/scenario/*/*/step.md; do
   _id="${_d%/*}"; _id="${_id##*/}/${_d##*/}"
   assert "the guide has hints for $_id" grep -qF "$_id" "$GS"
 done
+assert "the guide quotes the check's ✓/✗ lines verbatim" grep -qF 'quote its ✓/✗ lines verbatim' "$GS"
+assert "the guide says the install is committed on main, develop created from it" grep -qF 'committed the install on **`main`**' "$GS"
 assert "the PDO recipe is documented, as optional" grep -qF '## Mode B from a shared PDO instance (optional)' "$REPO/tutorial/README.md"
 assert "the mode documents its guide" grep -qF 'tuto.sh' "$REPO/tutorial/modes/b-real-agent/mode.md"
 
