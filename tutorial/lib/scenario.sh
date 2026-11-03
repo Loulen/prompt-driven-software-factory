@@ -36,44 +36,218 @@ tuto_width() {
   printf '%s' "$_tw"
 }
 
-# tuto_md WIDTH [PREFIX] — markdown on stdin, rendered for the terminal: paragraphs and list items
-# re-flowed and wrapped to WIDTH (hanging indent for list items), headings and **bold** in bold,
-# code fences and tables verbatim, `⏺ Tool(…)` lines dimmed; every line prefixed with PREFIX.
+# tuto_md WIDTH [PREFIX] — markdown on stdin, rendered for the terminal, every line prefixed with
+# PREFIX and kept within WIDTH display columns (wide emoji count 2, so nothing hard-wraps outside
+# the prefix):
+#   - paragraphs and list items re-flowed and wrapped (hanging indent for list items);
+#   - headings and **bold** in bold; `code` spans highlighted (backticks dropped) when colours are on,
+#     kept as typed otherwise;
+#   - code fences: the ``` lines dropped, the content indented, kept as is and cut to the width;
+#   - tables aligned in columns (│), cells wrapped when the table is too wide; when even that does
+#     not fit, each row is shown as a list of `header: value` fields;
+#   - `⏺ Tool(…)` lines dimmed.
+# awk runs in the C locale, so every awk (mawk, gawk, busybox) counts bytes the same way and the
+# display width is computed here from UTF-8.
 tuto_md() {
-  awk -v width="$1" -v prefix="${2:-}" -v B="$_TUTO_B" -v D="$_TUTO_D" -v R="$_TUTO_R" '
-    function out(s,   r, p) {
-      r = bold ? B : ""
-      while ((p = index(s, "**")) > 0) {
-        r = r substr(s, 1, p - 1) (bold ? R : B)
-        bold = !bold
-        s = substr(s, p + 2)
-      }
-      r = r s
-      if (bold) r = r R
-      print prefix r
+  LC_ALL=C awk -v width="$1" -v prefix="${2:-}" -v B="$_TUTO_B" -v D="$_TUTO_D" -v R="$_TUTO_R" '
+    # ---------------------------------------------------------------- widths
+    # dlen(s) -> display columns of s: escape sequences ignored, one per UTF-8 character, two for
+    # 4-byte characters (emoji) and for the wide BMP emoji the recordings use.
+    function dlen(s,   t, n) {
+      gsub(/\033\[[0-9;]*m/, "", s)
+      t = s; gsub(/[\200-\277]/, "", t); n = length(t)
+      t = s; n += gsub(/[\360-\367]/, "", t)
+      t = s; n += gsub(WIDE, "", t)
+      return n
     }
-    function flush(   n, i, words, line, first) {
-      if (para == "") return
-      n = split(para, words, / +/)
-      line = ppre; first = 1
+    # cwidth(s, i) -> display columns of the character starting at byte i (0 for a continuation byte).
+    function cwidth(s, i,   c) {
+      c = substr(s, i, 1)
+      if (c ~ /[\200-\277]/) return 0
+      if (c ~ /[\360-\367]/) return 2
+      if (c ~ /[\340-\357]/ && substr(s, i, 3) ~ ("^(" WIDE ")")) return 2
+      return 1
+    }
+    # cut(s, n) -> the longest head of s that fits in n columns, never splitting a character.
+    function cut(s, n,   i, k, cw, L) {
+      L = length(s); k = 0
+      for (i = 1; i <= L; i++) {
+        cw = cwidth(s, i)
+        if (cw && k + cw > n) return substr(s, 1, i - 1)
+        k += cw
+      }
+      return s
+    }
+    # vis(s) -> s as it will show: without the markup the renderer turns into styles.
+    function vis(s) { gsub(/\*\*/, "", s); if (color) gsub(/`/, "", s); return s }
+    function vlen(s) { return dlen(vis(s)) }
+    function spaces(n,   r) { r = ""; while (n-- > 0) r = r " "; return r }
+    function rep(c, n,   r) { r = ""; while (n-- > 0) r = r c; return r }
+
+    # ---------------------------------------------------------------- inline styles
+    # sty(s) -> s with **bold** and `code` turned into terminal styles. The state (sb, sc) carries
+    # over to the next line of the same paragraph or cell: styles are closed at the end of a line
+    # and re-opened at the start of the next one. reset() starts a new block.
+    function reset() { sb = 0; sc = 0 }
+    function sty(s,   r, pb, pc) {
+      r = (sb ? B : "") (sc ? C : "")
+      while (s != "") {
+        pc = color ? index(s, "`") : 0
+        pb = sc ? 0 : index(s, "**")
+        if (pc && (!pb || pc < pb)) {
+          r = r substr(s, 1, pc - 1) (sc ? CO : C); sc = !sc; s = substr(s, pc + 1)
+        } else if (pb) {
+          r = r substr(s, 1, pb - 1) (sb ? BO : B); sb = !sb; s = substr(s, pb + 2)
+        } else { r = r s; s = "" }
+      }
+      if (sc) r = r CO
+      if (sb) r = r BO
+      return r
+    }
+    function out(s) { print prefix sty(s) }
+
+    # ---------------------------------------------------------------- paragraphs
+    # wrap(text, avail) -> fills the global WL[1..n] with the lines of text wrapped to avail columns
+    # (a word longer than a line is cut); returns n.
+    function wrap(text, avail,   n, i, words, line, k, wd, room, piece) {
+      split("", WL); k = 0; line = ""
+      n = split(text, words, / +/)
       for (i = 1; i <= n; i++) {
-        if (words[i] == "") continue
-        if (first) { line = line words[i]; first = 0; continue }
-        if (length(line) + 1 + length(words[i]) > w) { out(line); line = phang words[i] }
-        else line = line " " words[i]
+        wd = words[i]
+        if (wd == "") continue
+        if (line != "" && vlen(line) + 1 + vlen(wd) > avail) { WL[++k] = line; line = "" }
+        while (vlen((line == "" ? "" : line " ") wd) > avail) {
+          room = avail - (line == "" ? 0 : vlen(line) + 1)
+          if (room < 1) { WL[++k] = line; line = ""; continue }
+          piece = cut(wd, room)
+          if (piece == "") { if (line == "") break; WL[++k] = line; line = ""; continue }
+          line = (line == "" ? "" : line " ") piece
+          wd = substr(wd, length(piece) + 1)
+          WL[++k] = line; line = ""
+        }
+        if (wd != "") line = (line == "" ? "" : line " ") wd
       }
-      out(line)
-      para = ""; bold = 0
+      if (line != "" || k == 0) WL[++k] = line
+      return k
     }
+    function flush(   n, i) {
+      if (para == "") return
+      n = wrap(para, w - dlen(ppre))
+      reset()
+      for (i = 1; i <= n; i++) out((i == 1 ? ppre : phang) WL[i])
+      para = ""; reset()
+    }
+
+    # ---------------------------------------------------------------- tables
+    function cells(line, row,   n, i, parts) {
+      sub(/^[ \t]*\|/, "", line); sub(/\|[ \t]*$/, "", line)
+      n = split(line, parts, /\|/)
+      for (i = 1; i <= n; i++) { sub(/^[ \t]+/, "", parts[i]); sub(/[ \t]+$/, "", parts[i]); T[row, i] = parts[i] }
+      if (n > ncol) ncol = n
+    }
+    function table(   i, j, k, nrows, hdr, total, big, nl, ml, wrapped, line, sepline, cw, L, mn, lw, cap, nw, WS, def, extra, given, add) {
+      split("", T); ncol = 0; nrows = 0; hdr = 0
+      for (i = 1; i <= nt; i++) {
+        if (TB[i] ~ /^[ \t|:-]+$/ && TB[i] ~ /-/) { if (!hdr) hdr = nrows; continue }
+        cells(TB[i], ++nrows)
+      }
+      for (j = 1; j <= ncol; j++) {
+        cw[j] = 1
+        for (i = 1; i <= nrows; i++) {
+          if (vlen(T[i, j]) > cw[j]) cw[j] = vlen(T[i, j])
+        }
+      }
+      total = 3 * (ncol - 1)
+      for (j = 1; j <= ncol; j++) total += cw[j]
+      wrapped = 0
+      if (total > w) {
+        # Too wide: every column keeps at least its longest word (capped at 32 columns, then less
+        # until it fits), and the room left goes to the columns in proportion to how much they lack.
+        wrapped = 1
+        for (j = 1; j <= ncol; j++) {
+          lw[j] = 1
+          for (i = 1; i <= nrows; i++) {
+            nw = split(T[i, j], WS, / +/)
+            for (k = 1; k <= nw; k++) if (vlen(WS[k]) > lw[j]) lw[j] = vlen(WS[k])
+          }
+        }
+        for (cap = 32; cap >= 8; cap -= 4) {
+          total = 3 * (ncol - 1); def = 0
+          for (j = 1; j <= ncol; j++) {
+            mn[j] = lw[j]; if (mn[j] > cap) mn[j] = cap
+            total += mn[j]; def += cw[j] - mn[j]
+          }
+          if (total <= w) break
+        }
+        if (total <= w) {
+          extra = w - total; given = 0; big = 0
+          for (j = 1; j <= ncol; j++) {
+            add = def ? int(extra * (cw[j] - mn[j]) / def) : 0
+            if (!big || cw[j] - mn[j] > cw[big] - mn[big]) big = j
+            cw[j] = mn[j] + add; given += add
+          }
+          cw[big] += extra - given; total = w
+        }
+      }
+      if (total > w) { records(nrows, hdr); nt = 0; return }
+      sepline = ""
+      for (j = 1; j <= ncol; j++) sepline = sepline (j > 1 ? "─┼─" : "") rep("─", cw[j])
+      for (i = 1; i <= nrows; i++) {
+        ml = 1
+        for (j = 1; j <= ncol; j++) {
+          nl = wrap(T[i, j], cw[j]); reset()
+          for (k = 1; k <= nl; k++) { L[j, k] = sty(WL[k]) spaces(cw[j] - vlen(WL[k])) }
+          LN[j] = nl; if (nl > ml) ml = nl
+        }
+        for (k = 1; k <= ml; k++) {
+          line = ""
+          for (j = 1; j <= ncol; j++) {
+            line = line (j > 1 ? D " │ " R : "") (k <= LN[j] ? L[j, k] : spaces(cw[j]))
+          }
+          sub(/ +$/, "", line)
+          if (i <= hdr) line = B line R
+          print prefix line
+        }
+        if (i == hdr) print prefix D sepline R
+        else if (wrapped && i < nrows) print prefix D sepline R
+      }
+      reset(); nt = 0
+    }
+    # records(): the table as one list item per row, each field `header: value`.
+    function records(nrows, hdr,   i, j, first) {
+      for (i = hdr + 1; i <= nrows; i++) {
+        first = 1
+        for (j = 1; j <= ncol; j++) {
+          if (T[i, j] == "") continue
+          ppre = first ? "• " : "  "; phang = "    "
+          para = (hdr && T[1, j] != "" ? "**" vis(T[1, j]) ":** " : "") T[i, j]
+          flush(); first = 0
+        }
+      }
+      ppre = ""; phang = ""
+    }
+
+    # ---------------------------------------------------------------- lines
     function verbatim(s) { flush(); print prefix s }
-    BEGIN { p = prefix; gsub(/\033\[[0-9;]*m/, "", p); w = width - length(p); if (w < 30) w = 30 }
-    /^[ \t]*```/ { verbatim($0); fence = !fence; next }
-    fence { verbatim($0); next }
+    BEGIN {
+      color = (B != "")
+      BO = color ? "\033[22m" : ""
+      C = color ? "\033[36m" : ""; CO = color ? "\033[39m" : ""
+      WIDE = "\342\234\205|\342\235\214|\342\236\226|\342\236\225|\342\255\220|\342\217\263|\342\234\250|\342\235\223"
+      p = prefix; w = width - dlen(p); if (w < 30) w = 30
+    }
+    nt && !/^[ \t]*\|/ { table() }
+    /^[ \t]*```/ { flush(); fence = !fence; next }
+    fence {
+      s = "  " $0
+      while (dlen(s) > w) { print prefix cut(s, w); s = "    " substr(s, length(cut(s, w)) + 1) }
+      print prefix s; next
+    }
     /^[ \t]*$/ { flush(); print prefix; next }
-    /^[ \t]*\|/ { verbatim($0); next }
-    /^[ \t]*⏺ / { verbatim(D $0 R); next }
-    /^---+[ \t]*$/ { verbatim($0); next }
-    /^#+ / { flush(); h = $0; sub(/^#+ /, "", h); gsub(/\*\*/, "", h); print prefix B h R; next }
+    /^[ \t]*\|/ { flush(); TB[++nt] = $0; next }
+    /^[ \t]*⏺ / { flush(); s = $0; if (dlen(s) > w) s = cut(s, w - 1) "…"; print prefix D s R; next }
+    /^---+[ \t]*$/ { verbatim(D rep("─", (w < 40 ? w : 40)) R); next }
+    /^#+ / { flush(); h = $0; sub(/^#+ /, "", h); gsub(/\*\*/, "", h); reset(); print prefix B sty(h) R; reset(); next }
     /^[ \t]*([-*+]|[0-9]+[.)]|>) / {
       flush()
       match($0, /^[ \t]*([-*+]|[0-9]+[.)]|>) /)
@@ -86,7 +260,7 @@ tuto_md() {
       t = $0; sub(/^[ \t]+/, "", t)
       if (para == "") { ppre = ""; phang = ""; para = t } else para = para " " t
     }
-    END { flush() }
+    END { if (nt) table(); flush() }
   '
 }
 

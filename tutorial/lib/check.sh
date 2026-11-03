@@ -8,10 +8,11 @@ _check_failed=0
 check_ok()   { printf '  ✓ %s\n' "$1"; }
 check_fail() { printf '  ✗ %s\n' "$1"; _check_failed=1; }
 
-# check_that "description" command [args…] — pass when the command succeeds.
+# check_that "description" command [args…] — pass when the command succeeds. The command gets no
+# terminal: stdin is /dev/null (a tool that sees a tty, like `node --test`, would write to it).
 check_that() {
   _ct_what=$1; shift
-  if "$@" >/dev/null 2>&1; then check_ok "$_ct_what"; else check_fail "$_ct_what"; fi
+  if "$@" </dev/null >/dev/null 2>&1; then check_ok "$_ct_what"; else check_fail "$_ct_what"; fi
 }
 
 check_file() { check_that "${2:-$1 exists}" test -f "$1"; }

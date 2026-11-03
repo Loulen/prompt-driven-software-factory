@@ -195,9 +195,9 @@ install_pdsf() {
 
 where_next() {
   tuto_rule "Where to look next"
-  cat <<EOF
-  * Your workspace: $WS
-    Open AGENTS.md and .agents/skills/<skill>/SKILL.md: that is exactly what your agent reads.
+  tuto_md "$(tuto_width)" <<EOF
+  * Your workspace: $WS. Open AGENTS.md and .agents/skills/<skill>/SKILL.md: that is exactly what
+    your agent reads.
   * The tutorial (scenario, modes, how it works): $TUTO_README_URL
   * PDSF: the README (the method, every skill) and docs/INSTALL.md (every install option).
   * On your project: run install.sh, then /build-factory. Run /verify-factory any time to see
@@ -232,7 +232,7 @@ choose_and_play_mode() {
   for _m in $_modes; do
     _i=$((_i + 1))
     tuto_say "  [$_i] $(tuto_meta "$_m/mode.md" title)  ($(tuto_mode_id "$_m"))"
-    tuto_say "      $(tuto_meta "$_m/mode.md" summary)"
+    tuto_meta "$_m/mode.md" summary | tuto_md "$(tuto_width)" "      "
   done
   tuto_say ""
   _choice=$(tuto_ask PDSF_TUTO_MODE "Mode [1-$_i] (1): " "1")

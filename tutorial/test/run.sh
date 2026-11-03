@@ -274,6 +274,56 @@ assert "/to-spec continues the grilling's agent session" test "$(rec_meta "$SCEN
 assert "the scaffold recording keeps alternative answers for its questions" test -n "$(rec_turn_choices "$SCEN/01-build-the-factory/02-scaffold" 3)"
 assert "the implement recording works on a feature branch merged into the integration branch" sh -c 'printf "%s" "$1" | grep -q "^feature/"' _ "$(rec_meta "$SCEN/02-use-the-factory/04-implement" via)"
 
+# max_width FILE -> the widest line of FILE, in terminal columns (escape sequences ignored, emoji
+# count 2): what the terminal needs to show it without wrapping.
+max_width() {
+  node -e '
+    const wide = (c) => c >= 0x1f000 || [0x2705, 0x274c, 0x2795, 0x2796, 0x2b50, 0x23f3, 0x2728, 0x2753].includes(c);
+    let max = 0;
+    for (const line of require("fs").readFileSync(process.argv[1], "utf8").split("\n")) {
+      let n = 0;
+      for (const ch of line.replace(/\x1b\[[0-9;]*m/g, "")) n += wide(ch.codePointAt(0)) ? 2 : 1;
+      if (n > max) max = n;
+    }
+    console.log(max);
+  ' "$1"
+}
+
+t "tuto_md renders markdown for the terminal, within the width"
+_md() { _w=$1; shift; printf '%s\n' "$@" | tuto_md "$_w" "  │ " >"$TMP/md.out"; }
+_md 60 "A paragraph that is long enough to need wrapping at sixty columns, and then some more words." "" "- a list item that is long enough to wrap too, so its next line hangs under the text"
+assert "paragraphs wrap within the width" test "$(max_width "$TMP/md.out")" -le 60
+assert "every line keeps the prefix" sh -c "! grep -qv '^  │ ' '$TMP/md.out'"
+assert "a wrapped list item hangs under its text" grep -q '^  │   [a-z]' "$TMP/md.out"
+_md 80 '```' 'node src/cli.js submit B-2 ada' '```'
+assert "code fences drop the backtick lines" sh -c "! grep -q '\`\`\`' '$TMP/md.out'"
+assert "code fences keep their content, indented" grep -qF '│   node src/cli.js submit B-2 ada' "$TMP/md.out"
+_md 80 '| Role | Meaning |' '|---|---|' '| `needs-triage` | a human must evaluate it |' '| `wontfix` | will not be done |'
+assert "a narrow table is aligned in columns" grep -qF '`wontfix`      │ will not be done' "$TMP/md.out"
+assert "a table header is ruled off" grep -qF '─┼─' "$TMP/md.out"
+assert "the |---| line is not shown" sh -c "! grep -qF -- '|---|' '$TMP/md.out'"
+_md 70 '| # | Check | Result | Evidence |' '|---|---|---|---|' \
+  '| 1 | Scaffold present | ✅ pass | `CLAUDE.md` links to `AGENTS.md`. It has the method constants and `## Agent skills`. All 4 port files in `docs/agents/` exist, plus `docs/adr/` and `CONTEXT.md`. |' \
+  '| 2 | Git-flow health | ✅ pass for `develop`, ➖ n/a for protection | `develop` exists and so does `main`. The repo has no remote, so there is no branch protection to check. |'
+assert "a wide table (with emoji) is wrapped within the width" test "$(max_width "$TMP/md.out")" -le 70
+assert "a wide table keeps its column bars" test "$(grep -c '│ .* │ .* │ ' "$TMP/md.out")" -ge 4
+_md 60 '| a | b | c | d | e | f | g | h |' '|-|-|-|-|-|-|-|-|' '| aaaaaaaaaa aaaaaaaa | bbbbbbbbbbbbbb | cccccccccccc | dddddddddddd | eeeeeeeeeeee | ffffffffffff | ggggggggggg | hhhhhhhhhhh |'
+assert "a table too wide for columns becomes header: value fields" sh -c "grep -qF '• a: aaaaaaaaaa aaaaaaaa' '$TMP/md.out' && grep -qF '  h: hhhhhhhhhhh' '$TMP/md.out'"
+assert "the fields stay within the width" test "$(max_width "$TMP/md.out")" -le 60
+_md 60 "a-very-long-word-$(printf '%0100d' 0)"
+assert "a word longer than a line is cut, not left to the terminal" test "$(max_width "$TMP/md.out")" -le 60
+_md 80 'Run `node --test` and **read** it.'
+assert "without colours, code spans keep their backticks" grep -qF 'Run `node --test` and read it.' "$TMP/md.out"
+( _TUTO_B=$(printf '\033[1m'); _TUTO_D=$(printf '\033[2m'); _TUTO_R=$(printf '\033[0m')
+  printf '%s\n' 'Run `node --test` and **read** it.' | tuto_md 80 ) >"$TMP/md.out"
+assert "with colours, code spans are highlighted instead of backticked" sh -c "! grep -qF '\`' '$TMP/md.out' && grep -qF \"\$(printf '\033[36mnode --test\033[39m')\" '$TMP/md.out'"
+assert "with colours, bold is closed without resetting the line" grep -qF "$(printf '\033[1mread\033[22m')" "$TMP/md.out"
+for _f in "$SCEN"/*/*/recording/transcript.md; do
+  _d=${_f%/recording/*}; _n=$(rec_turn_count "$_d"); _i=1
+  while [ "$_i" -le "$_n" ]; do rec_turn_text "$_d" "$_i" | tuto_md 60 "  │   "; _i=$((_i + 1)); done
+done >"$TMP/md.out"
+assert "every recorded turn renders within 60 columns" test "$(max_width "$TMP/md.out")" -le 60
+
 t "the recording library parses turns, choices and the replay keys"
 FAKE="$TMP/fake-step"
 mkdir -p "$FAKE/recording/files/notes"
@@ -347,11 +397,14 @@ t "mode A1 is in the menu"
 assert_out "$TMP/claude.log" "[1] Narrated replay  (a1)"
 
 t "mode A1, non-interactive, every chapter: every step and every check pass, zero tokens"
-tuto ws-a1 "$TMP/a1.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
+tuto ws-a1 "$TMP/a1.log" PATH="$TMP/bin:$PATH" COLUMNS=80 PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
 assert "the tutorial exits 0" test $? -eq 0
+# (the install command is shown whole, to be copied: it is the one line allowed to be longer)
+sed -n '/^──── Mode A1/,$p' "$TMP/a1.log" | grep -v '^  \$ curl ' >"$TMP/a1-mode.log"
+assert "every line of the mode fits an 80-column terminal" test "$(max_width "$TMP/a1-mode.log")" -le 80
 WS="$TMP/ws-a1"
 assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
-assert_out "$TMP/a1.log" "12 steps played, every check green; 7 of them simulated from recordings (0 tokens)."
+assert_out "$TMP/a1.log" "12 steps played, every check green; 7 of them replayed (0 tokens)."
 assert "every agent step is flagged SIMULATED" test "$(grep -c '^  ┌─ SIMULATED ─ replay of a real' "$TMP/a1.log")" -eq 7
 assert "every agent step closes its SIMULATED frame" test "$(grep -c '^  └─ SIMULATED ─' "$TMP/a1.log")" -eq 7
 assert "no check failed" sh -c "! grep -q '✗' '$TMP/a1.log'"
@@ -384,7 +437,7 @@ assert "the workspace is clean at the end" sh -c "[ -z \"\$(git -C '$WS' status 
 t "mode A1 with the .agents (generic) layout, chapters 2 and 3 skipped"
 tuto ws-a1-generic "$TMP/a1-generic.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y
 assert "the tutorial exits 0" test $? -eq 0
-assert_out "$TMP/a1-generic.log" "4 steps played, every check green; 3 of them simulated from recordings (0 tokens)."
+assert_out "$TMP/a1-generic.log" "4 steps played, every check green; 3 of them replayed (0 tokens)."
 assert_out "$TMP/a1-generic.log" "Skipping Chapter 2"
 assert_out "$TMP/a1-generic.log" "Skipping Chapter 3"
 assert_not "no chapter 2 step was played" grep -q 'Step 2\.' "$TMP/a1-generic.log"

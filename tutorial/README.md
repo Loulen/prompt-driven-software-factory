@@ -147,7 +147,9 @@ environment above. Its output is shown to the learner. Non-zero = the action fai
 Checks that the workspace reached the step's expected state, by observing files, git and the
 fixture's tests, never by trusting a mode. Run as `sh check.sh` with the workspace as cwd and the
 `PDSF_TUTO_*` environment. It sources `"$PDSF_TUTO_ROOT/lib/check.sh"`, prints one `✓` / `✗` line
-per expectation, and ends with `check_done`: **exit 0 = the step succeeded**. Every mode runs it
+per expectation, and ends with `check_done`: **exit 0 = the step succeeded**. The commands given
+to `check_that` run with no terminal (stdin `/dev/null`, output discarded), so they cannot write
+into the learner's screen. Every mode runs it
 after the step. A simulated step must leave the workspace in a state that passes it, exactly like
 the real skill would.
 
@@ -310,7 +312,7 @@ Source it after exporting `PDSF_TUTO_ROOT`:
 | `tuto_modes`, `tuto_mode_id MODE` | Shipped modes; a mode's short id |
 | `tuto_ask VAR "prompt" default`, `tuto_pause`, `tuto_is_yes`, `tuto_is_no` | Prompts on `/dev/tty`, env-overridable |
 | `tuto_say`, `tuto_bold`, `tuto_dim`, `tuto_rule`, `tuto_die` | Terminal output |
-| `tuto_width`, `tuto_md WIDTH [PREFIX]` | The render width; markdown on stdin, re-flowed and wrapped for the terminal |
+| `tuto_width`, `tuto_md WIDTH [PREFIX]` | The render width (`$COLUMNS`, else the terminal's, within 60–110); markdown on stdin rendered for the terminal, every line prefixed and kept within WIDTH display columns: paragraphs and list items re-flowed, `**bold**`, `` `code` `` highlighted (backticks kept without colours), fences shown indented without their ``` lines, tables aligned in columns (cells wrapped when too wide, `header: value` fields when even that does not fit). Use it for any text a mode prints, so nothing hard-wraps outside its indent |
 
 `lib/recording.sh` (source it after `lib/scenario.sh`):
 

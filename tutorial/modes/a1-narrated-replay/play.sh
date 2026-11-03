@@ -16,6 +16,20 @@ WIDTH=$(tuto_width)
 SIM="  ${_TUTO_D}│${_TUTO_R} "
 sim_say() { printf '%s%s\n' "$SIM" "$*"; }
 
+# sim_note "text" — a dimmed note inside the frame, wrapped to the width.
+sim_note() {
+  printf '%s\n' "$1" | tuto_md "$WIDTH" "$SIM$_TUTO_D" | sed "s/\$/$_TUTO_R/"
+}
+
+# fit PREFIX — plain lines on stdin, each prefixed and kept within the width: a line that does not
+# fit is cut (never inside a UTF-8 character) and ends with …, so the terminal never wraps it
+# outside its indent.
+fit() {
+  LC_ALL=C awk -v w="$((WIDTH - ${#1} - 1))" -v p="$1" '
+    length($0) > w + 1 { n = w; while (n > 0 && substr($0, n + 1, 1) ~ /[\200-\277]/) n--; $0 = substr($0, 1, n) "…" }
+    { print p $0 }'
+}
+
 sim_turn() {
   sim_say ""
   if [ "$1" = learner ]; then
@@ -37,11 +51,10 @@ replay() {
   _rp_from=$(rec_git symbolic-ref --short -q HEAD)
 
   tuto_say ""
-  printf '  %s┌─ SIMULATED ─%s %s\n' "$_TUTO_B" "$_TUTO_R" "replay of a real \`$(tuto_step_command "$_rp_step")\` session, recorded $(rec_meta "$_rp_step" recorded)"
-  sim_say "${_TUTO_D}No agent runs now, no token is spent: you read what the agent did in that run"
-  sim_say "($(rec_meta "$_rp_step" recorder)). On your project, the agent does this work for real.${_TUTO_R}"
+  printf '  %s┌─ SIMULATED ─%s %s\n' "$_TUTO_B" "$_TUTO_R" "replay of a real $(tuto_step_command "$_rp_step") session, recorded $(rec_meta "$_rp_step" recorded)"
+  sim_note "No agent runs now, no token is spent: you read what the agent did in that run ($(rec_meta "$_rp_step" recorder)). On your project, the agent does this work for real."
   [ "$(rec_meta "$_rp_step" session)" = continued ] && \
-    sim_say "${_TUTO_D}Same agent session as the previous step: the learner just typed the next command.${_TUTO_R}"
+    sim_note "Same agent session as the previous step: the learner just typed the next command."
   _rp_n=$(rec_turn_count "$_rp_step"); _rp_i=1
   while [ "$_rp_i" -le "$_rp_n" ]; do
     _rp_role=$(rec_turn_role "$_rp_step" "$_rp_i")
@@ -71,7 +84,7 @@ replay() {
   if [ "$(rec_git rev-parse HEAD)" = "$_rp_before" ]; then
     tuto_say "  no file changed: this skill only reads and reports."
   else
-    rec_git log --format='  commit: %h %s' "$_rp_before..HEAD"
+    rec_git log --format='commit: %h %s' "$_rp_before..HEAD" | fit "  "
     rec_git diff --stat=$((WIDTH - 4)) "$_rp_before" HEAD | sed 's/^/  /'
   fi
 }
@@ -111,7 +124,7 @@ play_step() {
     tuto_say ""
     tuto_say "Runs for real:"
     _ps_out=$(tuto_run_action "$_ps_step" 2>&1); _ps_rc=$?
-    printf '%s\n' "$_ps_out" | sed 's/^/  /'
+    printf '%s\n' "$_ps_out" | fit "  "
     [ "$_ps_rc" -eq 0 ] || tuto_die "the action of $(tuto_step_id "$_ps_step") failed."
   fi
   [ "$_ps_kind" = agent ] && replay "$_ps_step"
@@ -128,12 +141,12 @@ play_step() {
 # ---------------------------------------------------------------------------- main
 
 tuto_rule "Mode A1 — Narrated replay"
-cat <<EOF
+tuto_md "$WIDTH" <<'EOF'
 You read along as Blackbelt gets its factory, step by step. For each step: the command you would
 type, what you do, what happens under the hood, then the result and its check.
 
   * Deterministic work (the install, git, the tests, every check) runs for REAL in your workspace.
-  * Agent work is ${_TUTO_B}SIMULATED${_TUTO_R}: replayed from a recording of a real run of the PDSF skill on
+  * Agent work is **SIMULATED**: replayed from a recording of a real run of the PDSF skill on
     this same project. It is framed with │ and headed ┌─ SIMULATED ─. No agent runs, no token.
 EOF
 
@@ -155,5 +168,8 @@ for _chapter in $(tuto_chapters); do
 done
 
 tuto_rule "Narrated replay complete"
-tuto_say "$STEPS steps played, every check green; $SIMULATED of them simulated from recordings (0 tokens)."
-tuto_say "Your workspace now holds what a real run leaves: look around it, run \`node --test\`."
+tuto_md "$WIDTH" <<EOF
+$STEPS steps played, every check green; $SIMULATED of them replayed (0 tokens).
+
+Your workspace now holds what a real run leaves: look around it, run \`node --test\`.
+EOF
