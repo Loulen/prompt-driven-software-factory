@@ -1,0 +1,60 @@
+{
+  "disciplines": [
+    { "id": "craft", "name": "Software Craftsmanship" },
+    { "id": "cloud", "name": "Cloud & DevOps" },
+    { "id": "data", "name": "Data Engineering" },
+    { "id": "agile", "name": "Agility" }
+  ],
+  "people": [
+    { "id": "ada", "name": "Ada", "roles": ["consultant"] },
+    { "id": "linus", "name": "Linus", "roles": ["consultant"] },
+    { "id": "grace", "name": "Grace", "roles": ["consultant", "mentor"] },
+    { "id": "margaret", "name": "Margaret", "roles": ["mentor", "sensei"] }
+  ],
+  "belts": [
+    {
+      "id": "B-1",
+      "consultantId": "ada",
+      "disciplineId": "craft",
+      "color": "WHITE",
+      "status": "VALIDATED",
+      "mentorId": "grace",
+      "objectives": [
+        { "id": "1", "label": "Write a first kata test-first", "status": "VALIDATED" }
+      ]
+    },
+    {
+      "id": "B-2",
+      "consultantId": "ada",
+      "disciplineId": "craft",
+      "color": "ORANGE",
+      "status": "IN_PROGRESS",
+      "mentorId": "grace",
+      "objectives": [
+        { "id": "1", "label": "Pair-program a kata with TDD", "status": "VALIDATED" },
+        { "id": "2", "label": "Run a refactoring workshop", "status": "TODO" }
+      ]
+    },
+    {
+      "id": "B-3",
+      "consultantId": "linus",
+      "disciplineId": "cloud",
+      "color": "WHITE",
+      "status": "IN_PROGRESS",
+      "mentorId": "margaret",
+      "objectives": [
+        { "id": "1", "label": "Deploy a container to a managed service", "status": "VALIDATED" },
+        { "id": "2", "label": "Write a CI pipeline for a small project", "status": "VALIDATED" }
+      ]
+    },
+    {
+      "id": "B-4",
+      "consultantId": "linus",
+      "disciplineId": "data",
+      "color": "WHITE",
+      "status": "REQUESTED",
+      "mentorId": null,
+      "objectives": []
+    }
+  ]
+}

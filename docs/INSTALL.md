@@ -37,22 +37,32 @@ Le bootstrap :
    des skills réguliers (dossiers `SKILL.md`) sous `.agents/skills/`, plus un `AGENTS.md` câblé via un
    bloc marqué `<!-- PDSF:BEGIN -->…<!-- PDSF:END -->` (**ré-exécutable**, jamais dupliqué). `AGENTS.md`
    est le standard inter-harness que **Copilot, Cursor, Codex…** lisent déjà.
-3. **Demande le harness** — `generic` (défaut) ou `claude`.
+3. **Demande la disposition du harness** — `[1] .agents` (générique, défaut) ou
+   `[2] .agents + .claude symlinks` (voir ci-dessous).
 4. **Demande si le dépôt est un monorepo** (voir ci-dessous).
 5. **Passe la main à `/build-factory`**.
 
 Il n'installe **jamais** dans le dépôt source PDSF lui-même : il refuse et réclame un dossier cible.
 
-### Harness : `generic` (défaut) ou `claude`
+### Harness : `.agents` (défaut) ou `.agents` + `.claude` symlinks
 
-La base est **générique** et se suffit à elle-même — `.agents/skills/` + `AGENTS.md`. Le choix
-`claude` ne fait qu'**ajouter un overlay de symlinks** par-dessus cette base, pour que Claude Code
-retrouve ses chemins :
+La base est **générique** et se suffit à elle-même — `.agents/skills/` + `AGENTS.md`. Le second
+choix ne fait qu'**ajouter un overlay de symlinks** par-dessus cette base, pour que Claude Code
+retrouve ses chemins. La question nomme chaque option par ce qu'elle écrit :
 
-| Harness | Ce qui est posé |
-| --- | --- |
-| `generic` (défaut) | `.agents/skills/<skill>/` (fichiers réels) + `AGENTS.md` câblé. Lu par Copilot, Cursor, Codex, … |
-| `claude` | le générique **+** `.claude/skills → ../.agents/skills` **+** `CLAUDE.md → AGENTS.md` (symlinks relatifs). |
+```text
+Harness layout?
+  [1] .agents                     generic: skills in .agents/skills/ + a wired AGENTS.md
+                                  (read by Copilot, Cursor, Codex, Claude Code…)
+  [2] .agents + .claude symlinks  the same, plus .claude/skills -> .agents/skills and
+                                  CLAUDE.md -> AGENTS.md (Claude Code's own paths)
+Choice [1/2] (1):
+```
+
+| Option (prompt) | `PDSF_HARNESS` | Ce qui est posé |
+| --- | --- | --- |
+| `[1] .agents` (défaut) | `generic` | `.agents/skills/<skill>/` (fichiers réels) + `AGENTS.md` câblé. Lu par Copilot, Cursor, Codex, … |
+| `[2] .agents + .claude symlinks` | `claude` | le générique **+** `.claude/skills → ../.agents/skills` **+** `CLAUDE.md → AGENTS.md` (symlinks relatifs). |
 
 Copilot n'a donc **pas** de traitement spécifique : il consomme le `AGENTS.md` générique comme les
 autres. « Avoir Claude, c'est juste un symlink au-dessus du défaut générique. »
@@ -66,7 +76,7 @@ question est posée sur `/dev/tty` (chemin **interactif** nominal).
 | Variable | Sens | Défaut |
 | --- | --- | --- |
 | `PDSF_SRC` | Checkout PDSF local d'où installer (`skills/`, `CONTEXT.md`, `docs/`). Force le mode **hors-ligne**. | (fetch réseau) |
-| `PDSF_HARNESS` | `generic` (`.agents/skills/` + `AGENTS.md`) ou `claude` (générique + overlay symlinks). | `generic` |
+| `PDSF_HARNESS` | `generic` (option `.agents` : `.agents/skills/` + `AGENTS.md`) ou `claude` (option `.agents` + `.claude` symlinks : générique + overlay). | `generic` |
 | `PDSF_MONOREPO` | `y`/`n` — installer une factory autonome par contexte (`.factory/<ctx>/`) ? | `n` |
 | `PDSF_CONTEXT` | Monorepo : nom du contexte / de la factory. | (demandé) |
 | `PDSF_MEMBERS` | Monorepo : sous-dossiers membres à câbler, séparés par espace ou virgule. Vide = aucun. | (demandé) |
@@ -92,8 +102,8 @@ Sur `monorepo = oui`, chaque **contexte métier** devient une **factory autonome
 - sa propre copie de `skills/`, plus les docs de domaine du contexte (`CONTEXT.md`, `docs/adr/`,
   `docs/agents/`, `AGENTS.md`) ;
 - les sous-projets membres sont reliés par des **symlinks relatifs, un par skill**, dans leur
-  `.agents/skills/`, plus un pointeur relatif depuis leur `AGENTS.md` vers la factory. En harness
-  `claude`, le membre reçoit en plus l'overlay `.claude/skills → .agents/skills` et `CLAUDE.md → AGENTS.md` ;
+  `.agents/skills/`, plus un pointeur relatif depuis leur `AGENTS.md` vers la factory. Avec l'option
+  `.agents` + `.claude` symlinks (`claude`), le membre reçoit en plus l'overlay `.claude/skills → .agents/skills` et `CLAUDE.md → AGENTS.md` ;
 - **rien n'est chargé à la racine** du monorepo.
 
 Le seul artefact partagé est **`.factory/pdsf-install.sh`** — une **copie octet-pour-octet** de

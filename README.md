@@ -42,6 +42,20 @@ reconstruit `CONTEXT.md` et les ADR depuis le code : prévoir une demi-journée)
 driver agentique qui se lance, labels de triage, scaffold et context présents, santé git-flow. Il
 rapporte, propose de corriger ce qui manque, et signale l'étape suivante — **sans jamais bloquer**.
 
+## Tutoriel
+
+Pour découvrir PDSF sans risque, une commande crée un espace de travail jetable autour d'un petit
+projet réaliste (**Blackbelt lite**), y installe PDSF pour de vrai, puis te guide pas à pas :
+construire la factory, t'en servir sur une story métier, et savoir où chercher ensuite.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh | sh
+```
+
+Hors-ligne depuis un checkout, lancé du dossier qui recevra l'espace de travail (hors du checkout) :
+`PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails, modes et variables `PDSF_TUTO_*` :
+**[`tutorial/README.md`](tutorial/README.md)** (en anglais).
+
 ## Pourquoi cette usine ?
 
 Depuis quelque temps, les outils qui accompagnent notre développement évoluent, voire sont
@@ -214,11 +228,12 @@ prompt-driven-factory/
 ├── README.md                       ← ce fichier (méthode + genèse)
 ├── CONTEXT.md                      ← glossaire de l'usine (langage de référence)
 ├── docs/
-│   ├── adr/                        ← décisions structurantes (ADR-0001…0005)
+│   ├── adr/                        ← décisions structurantes (ADR-0001…0006)
 │   ├── agents/                     ← config backlogs / triage / domaine
 │   ├── test-scenarios/             ← Happy Paths (≤ 3)
 │   └── assets/                     ← schémas de la méthode
 ├── .claude-plugin/                 ← canal plugin (marketplace.json, plugin.json)
+├── tutorial/                       ← le tutoriel (script d'entrée, fixture blackbelt-lite, scénario) — jamais installé
 └── skills/
     ├── build-factory/              ← amorçage (backlogs, triage, issue-tracker-{github,gitlab,local}…)
     ├── verify-factory/             ← health check
