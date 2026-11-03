@@ -237,6 +237,213 @@ printf '# CONTEXT\n' >"$WS/CONTEXT.md"
 assert "scaffold check passes" tuto_run_check "$SCEN/01-build-the-factory/02-scaffold"
 assert_not "a stub CONTEXT.md does not pass the context check" tuto_run_check "$SCEN/01-build-the-factory/03-context"
 
+# ---------------------------------------------------------------------------- recordings
+
+. "$REPO/tutorial/lib/recording.sh"
+
+t "every agent step has a recording of a real run, in the documented format"
+for _s in $(for _c in $(tuto_chapters); do tuto_steps "$_c"; done); do
+  [ "$(tuto_step_kind "$_s")" = agent ] || continue
+  _id=$(tuto_step_id "$_s")
+  assert "$_id has a recording" tuto_has_recording "$_s"
+  tuto_has_recording "$_s" || continue
+  assert "$_id: the transcript names its step" test "$(rec_meta "$_s" step)" = "$_id"
+  assert "$_id: the transcript names the step's command" test "$(rec_meta "$_s" command)" = "$(tuto_step_command "$_s")"
+  assert "$_id: format 1" test "$(rec_meta "$_s" format)" = 1
+  for _k in branch recorded recorder pdsf harness; do
+    assert "$_id: the transcript records its $_k" test -n "$(rec_meta "$_s" $_k)"
+  done
+  assert "$_id: recorded by a real agent (Claude Code …)" sh -c 'printf "%s" "$1" | grep -q "^Claude Code [0-9]"' _ "$(rec_meta "$_s" recorder)"
+  assert "$_id: session is new or continued" sh -c 'case "$1" in new|continued) exit 0;; *) exit 1;; esac' _ "$(rec_meta "$_s" session)"
+  _n=$(rec_turn_count "$_s")
+  assert "$_id: at least one exchange" test "$_n" -ge 2
+  assert "$_id: the first turn types the step's command" sh -c 'case "$1" in "$2"*) exit 0;; *) exit 1;; esac' _ "$(rec_turn_text "$_s" 1)" "$(tuto_step_command "$_s")"
+  assert "$_id: the agent has the last word" test "$(rec_turn_role "$_s" "$_n")" = agent
+  _i=1; _alt=0
+  while [ "$_i" -le "$_n" ]; do
+    _r=$(rec_turn_role "$_s" "$_i")
+    [ $((_i % 2)) -eq 1 ] && [ "$_r" != learner ] && _alt=1
+    [ $((_i % 2)) -eq 0 ] && [ "$_r" != agent ] && _alt=1
+    [ -n "$(rec_turn_text "$_s" "$_i")" ] || _alt=1
+    _i=$((_i + 1))
+  done
+  assert "$_id: turns alternate learner / agent, none empty" test "$_alt" -eq 0
+  assert "$_id: no machine-specific path leaked into the recording" sh -c "! grep -rqE '/tmp/|/home/|/Users/' '$_s/recording'"
+done
+assert "/to-spec continues the grilling's agent session" test "$(rec_meta "$SCEN/02-use-the-factory/02-to-spec" session)" = continued
+assert "the scaffold recording keeps alternative answers for its questions" test -n "$(rec_turn_choices "$SCEN/01-build-the-factory/02-scaffold" 3)"
+assert "the implement recording works on a feature branch merged into the integration branch" sh -c 'printf "%s" "$1" | grep -q "^feature/"' _ "$(rec_meta "$SCEN/02-use-the-factory/04-implement" via)"
+
+t "the recording library parses turns, choices and the replay keys"
+FAKE="$TMP/fake-step"
+mkdir -p "$FAKE/recording/files/notes"
+cat >"$FAKE/recording/transcript.md" <<'EOF'
+---
+step: 09-fake/01-step
+command: /fake
+branch: integration/fake
+commit: Fake work
+session: new
+via: feature/fake
+merge: Merge feature/fake
+branches: extra/one
+removed: gone.txt
+format: 1
+---
+
+# Recording — fake
+
+<!-- pdsf-turn: learner -->
+### You
+
+/fake
+
+<!-- pdsf-turn: agent -->
+### Agent
+
+⏺ Bash(ls)
+
+Question?
+
+### Not a turn heading
+
+<!-- pdsf-turn: learner -->
+<!-- pdsf-choices: Second option | Third option -->
+### You
+
+The recorded answer.
+
+<!-- pdsf-turn: agent -->
+### Agent
+
+Done.
+EOF
+printf 'note\n' >"$FAKE/recording/files/notes/n.md"
+assert "4 turns" test "$(rec_turn_count "$FAKE")" -eq 4
+assert "roles" test "$(rec_turn_role "$FAKE" 1)$(rec_turn_role "$FAKE" 2)$(rec_turn_role "$FAKE" 3)" = learneragentlearner
+assert "a learner turn's text" test "$(rec_turn_text "$FAKE" 1)" = /fake
+assert "an agent turn keeps its tool lines and sub-headings" test "$(rec_turn_text "$FAKE" 2 | tr '\n' '~')" = "⏺ Bash(ls)~~Question?~~### Not a turn heading~"
+assert "the answer comes without its choices line" test "$(rec_turn_text "$FAKE" 3)" = "The recorded answer."
+assert "the alternative answers" test "$(rec_turn_choices "$FAKE" 3 | tr '\n' '~')" = "Second option~Third option~"
+assert "an open question has no choices" test -z "$(rec_turn_choices "$FAKE" 1)"
+assert "the recorded files" test "$(rec_files "$FAKE")" = notes/n.md
+REPLAY="$TMP/replay-ws"
+mkdir -p "$REPLAY" && git -C "$REPLAY" init -q && printf 'x\n' >"$REPLAY/gone.txt"
+git -C "$REPLAY" add -A && git -C "$REPLAY" -c user.name=t -c user.email=t@t commit -q -m init
+( PDSF_TUTO_WORKSPACE="$REPLAY"; rec_apply "$FAKE" ) >/dev/null 2>&1
+assert "rec_apply ends on the recorded branch" test "$(git -C "$REPLAY" symbolic-ref --short HEAD)" = integration/fake
+assert "rec_apply commits on the via branch, merged --no-ff" sh -c "[ \"\$(git -C '$REPLAY' log -1 --format=%s)\" = 'Merge feature/fake' ] && [ \"\$(git -C '$REPLAY' log -1 --format=%s feature/fake)\" = 'Fake work' ]"
+assert "rec_apply writes the files and removes the removed ones" sh -c "[ -f '$REPLAY/notes/n.md' ] && [ ! -e '$REPLAY/gone.txt' ] && [ -z \"\$(git -C '$REPLAY' status --porcelain)\" ]"
+assert "rec_apply creates the other branches" git -C "$REPLAY" show-ref --verify --quiet refs/heads/extra/one
+
+# ---------------------------------------------------------------------------- mode A1
+
+# A `claude` on PATH that leaves a mark: mode A1 must never call an agent.
+mkdir -p "$TMP/bin"
+printf '#!/bin/sh\necho "$*" >> "%s/claude-called"\nexit 1\n' "$TMP" >"$TMP/bin/claude"
+chmod +x "$TMP/bin/claude"
+
+t "mode A1 is in the menu"
+assert_out "$TMP/claude.log" "[1] Narrated replay  (a1)"
+
+t "mode A1, non-interactive, every chapter: every step and every check pass, zero tokens"
+tuto ws-a1 "$TMP/a1.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
+assert "the tutorial exits 0" test $? -eq 0
+WS="$TMP/ws-a1"
+assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
+assert_out "$TMP/a1.log" "12 steps played, every check green; 7 of them simulated from recordings (0 tokens)."
+assert "every agent step is flagged SIMULATED" test "$(grep -c '^  ┌─ SIMULATED ─ replay of a real' "$TMP/a1.log")" -eq 7
+assert "every agent step closes its SIMULATED frame" test "$(grep -c '^  └─ SIMULATED ─' "$TMP/a1.log")" -eq 7
+assert "no check failed" sh -c "! grep -q '✗' '$TMP/a1.log'"
+for _cmd in "> /build-factory" "> /verify-factory" "> /grill-with-docs" "> /to-spec" "> /to-tickets" "> /implement" "\$ curl -fsSL"; do
+  assert_out "$TMP/a1.log" "$_cmd"
+done
+assert "every step says what you do and what happens under the hood" sh -c "[ \"\$(grep -c '^What you do' '$TMP/a1.log')\" -eq 12 ] && [ \"\$(grep -c '^Under the hood' '$TMP/a1.log')\" -eq 12 ]"
+assert_out "$TMP/a1.log" "you › /build-factory"
+assert_out "$TMP/a1.log" "agent ›"
+assert_out "$TMP/a1.log" "What changed in your workspace (real git output):"
+assert_out "$TMP/a1.log" "Runs for real:"
+assert_out "$TMP/a1.log" "Belt US-1 [user] Submit my belt for sensei validation"
+assert_out "$TMP/a1.log" "Where to look next"
+assert "chapter 1: both backlogs are local markdown" sh -c "grep -q 'business-backlog/' '$WS/docs/agents/business-backlog.md' && grep -q '.scratch' '$WS/docs/agents/issue-tracker.md'"
+assert "chapter 1: CONTEXT.md and the founding ADRs are on develop" sh -c "git -C '$WS' show develop:CONTEXT.md | grep -q Belt && git -C '$WS' ls-tree --name-only develop docs/adr/ | grep -q '\.md$'"
+assert "chapter 2: the story's integration branch is checked out" sh -c "git -C '$WS' symbolic-ref --short HEAD | grep -qi '^integration/belt-us-1'"
+assert "chapter 2: tickets ready for an agent on the local tracker" sh -c "grep -l 'ready-for-agent' '$WS'/.scratch/*/tickets/*.md"
+assert "chapter 2: the business story links back to its ticket" grep -q '^## Comments' "$WS/business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
+assert "chapter 2: the ticket was merged from its feature branch" sh -c "git -C '$WS' log -1 --format=%s | grep -q '^Merge feature/'"
+assert "chapter 2: node --test is green" sh -c "cd '$WS' && node --test"
+assert "chapter 2: the submission rule is tested" grep -q 'submit' "$WS/test/blackbelt.test.js"
+( cd "$WS" && node src/cli.js reset && node src/cli.js submit B-3 linus ) >"$TMP/submit-ok.log" 2>&1
+assert "Linus submits his belt: it awaits the sensei's validation" grep -q 'B-3: NEED_VALIDATION' "$TMP/submit-ok.log"
+( cd "$WS" && node src/cli.js submit B-2 ada ) >"$TMP/submit-ko.log" 2>&1
+assert "Ada's submission is refused (exit 2)" test $? -eq 2
+assert "the refusal names the remaining objective" grep -q 'Run a refactoring workshop' "$TMP/submit-ko.log"
+( cd "$WS" && node src/cli.js reset ) >/dev/null 2>&1
+assert "the workspace is clean at the end" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
+
+t "mode A1 with the .agents (generic) layout, chapters 2 and 3 skipped"
+tuto ws-a1-generic "$TMP/a1-generic.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y
+assert "the tutorial exits 0" test $? -eq 0
+assert_out "$TMP/a1-generic.log" "4 steps played, every check green; 3 of them simulated from recordings (0 tokens)."
+assert_out "$TMP/a1-generic.log" "Skipping Chapter 2"
+assert_out "$TMP/a1-generic.log" "Skipping Chapter 3"
+assert_not "no chapter 2 step was played" grep -q 'Step 2\.' "$TMP/a1-generic.log"
+assert "chapter 1's state is reached" sh -c "cd '$TMP/ws-a1-generic' && git show develop:CONTEXT.md | grep -q Belt && [ ! -e CLAUDE.md ]"
+assert "no integration branch without chapter 2" sh -c "[ -z \"\$(git -C '$TMP/ws-a1-generic' branch --list 'integration/*')\" ]"
+assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
+assert_out "$TMP/a1-generic.log" "Where to look next"
+
+t "mode A1 stops on a failing step check"
+SRC=$(fake_src a1-broken)
+cp -R "$REPO/tutorial/modes/." "$SRC/tutorial/modes/"
+rm "$SRC/tutorial/scenario/01-build-the-factory/03-context/recording/files/CONTEXT.md"
+( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-a1-broken PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/a1-broken.log" 2>&1
+assert_not "the tutorial fails" test $? -eq 0
+assert_out "$TMP/a1-broken.log" "the check of 01-build-the-factory/03-context failed"
+assert_not "it does not go on to the next step" grep -q 'Step 1.4' "$TMP/a1-broken.log"
+
+# ---------------------------------------------------------------------------- recorder
+
+t "the recorder drives an agent turn by turn and writes the recording (fake agent)"
+SRC=$(fake_src recorder)
+cat >"$TMP/bin/fake-agent" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$TMP/fake-agent.calls"
+mkdir -p notes && printf 'written by the fake agent\n' > notes/health.md
+printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-42","model":"fake-model","claude_code_version":"9.9.9"}'
+printf '%s\n' "{\"type\":\"assistant\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{\"command\":\"cd \$(pwd -P) && git status\"}}]}}"
+printf '%s\n' '{"type":"assistant","parent_tool_use_id":"sub","message":{"content":[{"type":"text","text":"subagent noise"}]}}'
+printf '%s\n' '{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"text","text":"All **green**. Fix anything?"}]}}'
+printf '%s\n' '{"type":"result","session_id":"fake-42","is_error":false}'
+EOF
+chmod +x "$TMP/bin/fake-agent"
+STEP=01-build-the-factory/04-verify-factory
+R="$SRC/tutorial/scenario/$STEP"
+sh "$SRC/tutorial/record/record.sh" prepare "$STEP" "$TMP/rec-ws" >"$TMP/rec.log" 2>&1
+assert "prepare: a fresh workspace with the earlier steps replayed" sh -c "git -C '$TMP/rec-ws' show develop:CONTEXT.md | grep -q Belt"
+PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$SRC/tutorial/record/record.sh" turn "$TMP/rec-ws" /verify-factory >"$TMP/rec-turn.log" 2>&1
+assert "turn: prints the agent's answer" grep -q 'Fix anything?' "$TMP/rec-turn.log"
+PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$SRC/tutorial/record/record.sh" turn "$TMP/rec-ws" --choices "Yes, fix it | Show me first" "No, thanks." >>"$TMP/rec-turn.log" 2>&1
+assert "the first turn starts a session" sh -c "head -n 1 '$TMP/fake-agent.calls' | grep -q '^-p /verify-factory --output-format' && ! head -n 1 '$TMP/fake-agent.calls' | grep -q -- --resume"
+assert "the next turn resumes it" sh -c "sed -n 2p '$TMP/fake-agent.calls' | grep -q -- '--resume fake-42'"
+sh "$SRC/tutorial/record/record.sh" finish "$STEP" "$TMP/rec-ws" >>"$TMP/rec.log" 2>&1
+assert "finish: the step's check passes on the recorded state" test $? -eq 0
+assert "finish: 4 turns" test "$(rec_turn_count "$R")" -eq 4
+assert "finish: the learner's answer" test "$(rec_turn_text "$R" 3)" = "No, thanks."
+assert "finish: its alternatives" test "$(rec_turn_choices "$R" 3 | tr '\n' '~')" = "Yes, fix it~Show me first~"
+assert "finish: tool calls shown as run from the workspace" sh -c "grep -qx '⏺ Bash(git status)' '$R/recording/transcript.md'"
+assert "finish: subagent traffic left out" sh -c "! grep -q 'subagent noise' '$R/recording/transcript.md'"
+assert "finish: the recorder and its agent are recorded" test "$(rec_meta "$R" recorder)" = "Claude Code 9.9.9, fake-model"
+assert "finish: the produced files are in files/" test -f "$R/recording/files/notes/health.md"
+assert "finish: what the agent left is committed, so the next step starts from it" sh -c "[ -z \"\$(git -C '$TMP/rec-ws' status --porcelain)\" ]"
+assert "finish: no workspace path leaks" sh -c "! grep -rqF '$TMP' '$R/recording'"
+: >"$TMP/fake-agent.calls"
+sh "$SRC/tutorial/record/record.sh" prepare "$STEP" "$TMP/rec-ws2" >/dev/null 2>&1
+PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$SRC/tutorial/record/record.sh" run "$STEP" "$TMP/rec-ws2" >"$TMP/rec-run.log" 2>&1
+assert "run: re-records the step from its recorded answers" test $? -eq 0
+assert "run: the agent got the same two learner turns" sh -c "[ \"\$(wc -l < '$TMP/fake-agent.calls' | tr -d ' ')\" -eq 2 ] && sed -n 2p '$TMP/fake-agent.calls' | grep -q '^-p No, thanks\.'"
+assert "run: the alternatives are kept" test "$(rec_turn_choices "$R" 3 | tr '\n' '~')" = "Yes, fix it~Show me first~"
+
 # ---------------------------------------------------------------------------- install.sh contract
 
 t "install.sh installs nothing from the tutorial into a project"

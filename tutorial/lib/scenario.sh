@@ -26,6 +26,70 @@ tuto_die()  { printf '%s\n' "PDSF tutorial: error: $*" >&2; exit 1; }
 
 tuto_has_tty() { { true >/dev/tty; } 2>/dev/null; }
 
+# tuto_width -> the width to render text at: $COLUMNS, else the terminal's, else 100; within 60–110.
+tuto_width() {
+  _tw=${COLUMNS:-}
+  case "$_tw" in ''|*[!0-9]*) _tw=$( (stty size </dev/tty | cut -d' ' -f2) 2>/dev/null) ;; esac
+  case "$_tw" in ''|*[!0-9]*) _tw=100 ;; esac
+  [ "$_tw" -gt 110 ] && _tw=110
+  [ "$_tw" -lt 60 ] && _tw=60
+  printf '%s' "$_tw"
+}
+
+# tuto_md WIDTH [PREFIX] — markdown on stdin, rendered for the terminal: paragraphs and list items
+# re-flowed and wrapped to WIDTH (hanging indent for list items), headings and **bold** in bold,
+# code fences and tables verbatim, `⏺ Tool(…)` lines dimmed; every line prefixed with PREFIX.
+tuto_md() {
+  awk -v width="$1" -v prefix="${2:-}" -v B="$_TUTO_B" -v D="$_TUTO_D" -v R="$_TUTO_R" '
+    function out(s,   r, p) {
+      r = bold ? B : ""
+      while ((p = index(s, "**")) > 0) {
+        r = r substr(s, 1, p - 1) (bold ? R : B)
+        bold = !bold
+        s = substr(s, p + 2)
+      }
+      r = r s
+      if (bold) r = r R
+      print prefix r
+    }
+    function flush(   n, i, words, line, first) {
+      if (para == "") return
+      n = split(para, words, / +/)
+      line = ppre; first = 1
+      for (i = 1; i <= n; i++) {
+        if (words[i] == "") continue
+        if (first) { line = line words[i]; first = 0; continue }
+        if (length(line) + 1 + length(words[i]) > w) { out(line); line = phang words[i] }
+        else line = line " " words[i]
+      }
+      out(line)
+      para = ""; bold = 0
+    }
+    function verbatim(s) { flush(); print prefix s }
+    BEGIN { p = prefix; gsub(/\033\[[0-9;]*m/, "", p); w = width - length(p); if (w < 30) w = 30 }
+    /^[ \t]*```/ { verbatim($0); fence = !fence; next }
+    fence { verbatim($0); next }
+    /^[ \t]*$/ { flush(); print prefix; next }
+    /^[ \t]*\|/ { verbatim($0); next }
+    /^[ \t]*⏺ / { verbatim(D $0 R); next }
+    /^---+[ \t]*$/ { verbatim($0); next }
+    /^#+ / { flush(); h = $0; sub(/^#+ /, "", h); gsub(/\*\*/, "", h); print prefix B h R; next }
+    /^[ \t]*([-*+]|[0-9]+[.)]|>) / {
+      flush()
+      match($0, /^[ \t]*([-*+]|[0-9]+[.)]|>) /)
+      ppre = substr($0, 1, RLENGTH); para = substr($0, RLENGTH + 1)
+      phang = ppre; gsub(/[^ \t]/, " ", phang)
+      if (ppre ~ />/) phang = ppre
+      next
+    }
+    {
+      t = $0; sub(/^[ \t]+/, "", t)
+      if (para == "") { ppre = ""; phang = ""; para = t } else para = para " " t
+    }
+    END { flush() }
+  '
+}
+
 # tuto_ask VAR "prompt" "default" -> prints the answer.
 # Same rule as install.sh: a SET variable (even empty) answers the question without prompting —
 # that is how a non-interactive run drives the tutorial; an UNSET one asks on /dev/tty (so

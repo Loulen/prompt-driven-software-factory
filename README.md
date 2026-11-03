@@ -52,6 +52,10 @@ construire la factory, t'en servir sur une story métier, et savoir où chercher
 curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh | sh
 ```
 
+Mode **replay narré** (A1) : zéro token, rien à installer. Les étapes de l'agent sont rejouées
+depuis l'enregistrement d'un vrai run des skills, et signalées `SIMULATED` ; le reste (install,
+git, tests, vérifications) tourne pour de vrai.
+
 Hors-ligne depuis un checkout, lancé du dossier qui recevra l'espace de travail (hors du checkout) :
 `PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails, modes et variables `PDSF_TUTO_*` :
 **[`tutorial/README.md`](tutorial/README.md)** (en anglais).
@@ -233,7 +237,7 @@ prompt-driven-factory/
 │   ├── test-scenarios/             ← Happy Paths (≤ 3)
 │   └── assets/                     ← schémas de la méthode
 ├── .claude-plugin/                 ← canal plugin (marketplace.json, plugin.json)
-├── tutorial/                       ← le tutoriel (script d'entrée, fixture blackbelt-lite, scénario) — jamais installé
+├── tutorial/                       ← le tutoriel (script d'entrée, fixture blackbelt-lite, scénario + enregistrements, modes) — jamais installé
 └── skills/
     ├── build-factory/              ← amorçage (backlogs, triage, issue-tracker-{github,gitlab,local}…)
     ├── verify-factory/             ← health check

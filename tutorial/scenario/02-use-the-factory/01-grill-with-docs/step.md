@@ -14,7 +14,7 @@ reads it, reads `CONTEXT.md` and the ADRs, then grills you on what the story lea
 ## Under the hood
 
 This is where the human effort of the method concentrates: one to two hours per story on a real
-project. The session creates the story's **integration branch**, `integration/belt-us-1-<slug>`,
+project. The session creates the story's **integration branch**, `integration/BELT-US-1-<slug>`,
 from `develop`. It is named after the business story, because the spec does not exist yet. It
 writes its decisions there as they settle: new terms in `CONTEXT.md`, an ADR when a decision had a
 real alternative.
