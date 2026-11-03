@@ -15,4 +15,5 @@ you. You don't need it to use PDSF.
 PDSF is the **method and its skills**; PDO is **one way to orchestrate** them. A PDO pipeline node
 is just an agent session that runs a PDSF skill in your repo, like you did by hand. Plug it in when
 you want to run several tickets in parallel or unattended. A shared PDO instance is also a way for
-a facilitator to run the real-agent tutorial for participants without their own subscription.
+a facilitator to run the real-agent tutorial for participants without their own subscription: an
+optional recipe, in the tutorial's README ("Mode B from a shared PDO instance").

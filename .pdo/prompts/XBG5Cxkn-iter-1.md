@@ -4,21 +4,22 @@ You are node `XBG5Cxkn` in pipeline `implement-loop`, iteration 1.
 
 ## Inputs
 
-- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-140331-58fa432/worktree/.pdo/artifacts/_input/output.md`
-- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-140331-58fa432/worktree/.pdo/artifacts/b4kko9SV/iter-1/out/output.md`
+- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-142407-db7cd52/worktree/.pdo/artifacts/_input/output.md`
+- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-142407-db7cd52/worktree/.pdo/artifacts/b4kko9SV/iter-1/out/output.md`
 
 ## Input Files
 
 The following files were passed to the entry node alongside the text prompt (the run's attachments). Read them as part of your input:
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-140331-58fa432/worktree/.pdo/artifacts/_input/spec-plan.md`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-142407-db7cd52/worktree/.pdo/artifacts/_input/impl-report-17.md`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-142407-db7cd52/worktree/.pdo/artifacts/_input/spec-plan.md`
 
 ## Outputs
 
-- `out`: write to `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-140331-58fa432/worktree/.pdo/artifacts/XBG5Cxkn/iter-1/out/output.md`
+- `out`: write to `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-142407-db7cd52/worktree/.pdo/artifacts/XBG5Cxkn/iter-1/out/output.md`
 
 ## Source code edits
 
-Your working directory `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-140331-58fa432/worktree` is the **run's shared worktree**: other nodes of this run may work in it at the same time. Make **all** source code edits there — do not `cd` elsewhere to edit files.
+Your working directory `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261103-142407-db7cd52/worktree` is the **run's shared worktree**: other nodes of this run may work in it at the same time. Make **all** source code edits there — do not `cd` elsewhere to edit files.
 
 You do not have to run any git command. When this node finishes, PDO keeps whatever you committed yourself and commits everything else you left behind onto the run's branch. Anything the repository's `.gitignore` covers stays out, and so does PDO's own `.pdo/artifacts/`; everything else goes in.
 
