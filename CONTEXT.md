@@ -82,6 +82,27 @@ it lives at `.factory/<context>/`, shared by that context's sub-projects. See AD
 A monorepo sub-project wired to a factory by relative symlinks; it shares that factory's skills and
 domain, and loads nothing at the monorepo root.
 
+### Onboarding
+
+**Tutorial**:
+The guided walkthrough that teaches a newcomer to install PDSF, build a factory and use it, on a
+throwaway **tutorial workspace** seeded from the **tutorial fixture**. It ships with PDSF but is
+not a skill a factory installs. See ADR-0006.
+_Avoid_: tour (PDO's word for its in-app walkthroughs), demo
+
+**Tutorial mode**:
+One way of playing the same tutorial scenario: **narrated replay**, **simulated session** (a
+stand-in harness), or **real agent**. The first two are simulated; the third spends tokens.
+
+**Simulated step**:
+A tutorial step whose agent work is replayed from a recording of a real run — zero tokens, known
+output — and always flagged as simulated to the learner. Deterministic steps (install, git,
+checks) are never simulated: they run for real.
+
+**Tutorial fixture**:
+`blackbelt-lite`, a small public-safe rewrite of Ippon's Blackbelt domain (disciplines, belts,
+mentor-validated objectives) that the tutorial builds a factory on.
+
 ## Principles
 
 **Guided, not gated**:
