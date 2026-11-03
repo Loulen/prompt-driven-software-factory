@@ -21,9 +21,9 @@ sim_note() {
   printf '%s\n' "$1" | tuto_md "$WIDTH" "$SIM$_TUTO_D" | sed "s/\$/$_TUTO_R/"
 }
 
-# fit PREFIX — plain lines on stdin, each prefixed and kept within the width: a line that does not
-# fit is cut (never inside a UTF-8 character) and ends with …, so the terminal never wraps it
-# outside its indent.
+# fit PREFIX — one-line items on stdin (commit subjects), each prefixed and kept within the width:
+# a line that does not fit is cut (never inside a UTF-8 character) and ends with …, so the terminal
+# never wraps it outside its indent. Text the learner must read whole goes through tuto_wrap.
 fit() {
   LC_ALL=C awk -v w="$((WIDTH - ${#1} - 1))" -v p="$1" '
     length($0) > w + 1 { n = w; while (n > 0 && substr($0, n + 1, 1) ~ /[\200-\277]/) n--; $0 = substr($0, 1, n) "…" }
@@ -124,7 +124,7 @@ play_step() {
     tuto_say ""
     tuto_say "Runs for real:"
     _ps_out=$(tuto_run_action "$_ps_step" 2>&1); _ps_rc=$?
-    printf '%s\n' "$_ps_out" | fit "  "
+    printf '%s\n' "$_ps_out" | tuto_wrap "$WIDTH" "  "
     [ "$_ps_rc" -eq 0 ] || tuto_die "the action of $(tuto_step_id "$_ps_step") failed."
   fi
   [ "$_ps_kind" = agent ] && replay "$_ps_step"

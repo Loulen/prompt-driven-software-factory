@@ -42,14 +42,15 @@ tuto_width() {
 #   - paragraphs and list items re-flowed and wrapped (hanging indent for list items);
 #   - headings and **bold** in bold; `code` spans highlighted (backticks dropped) when colours are on,
 #     kept as typed otherwise;
-#   - code fences: the ``` lines dropped, the content indented, kept as is and cut to the width;
+#   - code fences: the ``` lines dropped, the content indented and kept as typed; a line too wide
+#     breaks at its last space that fits (a word longer than a line is cut), on hanging lines;
 #   - tables aligned in columns (│), cells wrapped when the table is too wide; when even that does
 #     not fit, each row is shown as a list of `header: value` fields;
 #   - `⏺ Tool(…)` lines dimmed.
 # awk runs in the C locale, so every awk (mawk, gawk, busybox) counts bytes the same way and the
 # display width is computed here from UTF-8.
 tuto_md() {
-  LC_ALL=C awk -v width="$1" -v prefix="${2:-}" -v B="$_TUTO_B" -v D="$_TUTO_D" -v R="$_TUTO_R" '
+  LC_ALL=C awk -v width="$1" -v prefix="${2:-}" -v raw="${_tuto_md_raw:-}" -v B="$_TUTO_B" -v D="$_TUTO_D" -v R="$_TUTO_R" '
     # ---------------------------------------------------------------- widths
     # dlen(s) -> display columns of s: escape sequences ignored, one per UTF-8 character, two for
     # 4-byte characters (emoji) and for the wide BMP emoji the recordings use.
@@ -229,6 +230,23 @@ tuto_md() {
 
     # ---------------------------------------------------------------- lines
     function verbatim(s) { flush(); print prefix s }
+    # vline(s): a line printed as typed (no markup); when it is too wide it breaks at the last space
+    # that fits (a word longer than a line is cut), and the rest goes on hanging lines indented two
+    # columns past the indent of the line.
+    function vline(s,   hang, piece, k, lead) {
+      gsub(/\t/, "    ", s)
+      match(s, /^ */); lead = RLENGTH
+      hang = spaces((lead + 2 < w / 2) ? lead + 2 : 2)
+      while (dlen(s) > w) {
+        piece = cut(s, w)
+        for (k = length(piece); k > lead && substr(piece, k, 1) != " "; k--) ;
+        if (substr(s, length(piece) + 1, 1) != " " && k > lead) piece = substr(piece, 1, k - 1)
+        sub(/ +$/, "", piece)
+        print prefix piece
+        s = substr(s, length(piece) + 1); sub(/^ +/, "", s); s = hang s; lead = length(hang)
+      }
+      print prefix s
+    }
     BEGIN {
       color = (B != "")
       BO = color ? "\033[22m" : ""
@@ -236,13 +254,10 @@ tuto_md() {
       WIDE = "\342\234\205|\342\235\214|\342\236\226|\342\236\225|\342\255\220|\342\217\263|\342\234\250|\342\235\223"
       p = prefix; w = width - dlen(p); if (w < 30) w = 30
     }
+    raw { vline($0); next }
     nt && !/^[ \t]*\|/ { table() }
     /^[ \t]*```/ { flush(); fence = !fence; next }
-    fence {
-      s = "  " $0
-      while (dlen(s) > w) { print prefix cut(s, w); s = "    " substr(s, length(cut(s, w)) + 1) }
-      print prefix s; next
-    }
+    fence { vline("  " $0); next }
     /^[ \t]*$/ { flush(); print prefix; next }
     /^[ \t]*\|/ { flush(); TB[++nt] = $0; next }
     /^[ \t]*⏺ / { flush(); s = $0; if (dlen(s) > w) s = cut(s, w - 1) "…"; print prefix D s R; next }
@@ -263,6 +278,11 @@ tuto_md() {
     END { if (nt) table(); flush() }
   '
 }
+
+# tuto_wrap WIDTH [PREFIX] — plain text on stdin (command output), every line kept as typed, prefixed
+# and kept within WIDTH display columns: a line too wide breaks at its last space that fits and
+# goes on hanging lines (indented two past the line's own indent) — no word is lost.
+tuto_wrap() { _tuto_md_raw=1 tuto_md "$@"; }
 
 # tuto_ask VAR "prompt" "default" -> prints the answer.
 # Same rule as install.sh: a SET variable (even empty) answers the question without prompting —

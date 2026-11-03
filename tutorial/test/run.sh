@@ -298,6 +298,15 @@ assert "a wrapped list item hangs under its text" grep -q '^  │   [a-z]' "$TMP
 _md 80 '```' 'node src/cli.js submit B-2 ada' '```'
 assert "code fences drop the backtick lines" sh -c "! grep -q '\`\`\`' '$TMP/md.out'"
 assert "code fences keep their content, indented" grep -qF '│   node src/cli.js submit B-2 ada' "$TMP/md.out"
+_md 60 '```' "  see docs/agents/issue-tracker.md and docs/agents/triage-labels.md for the missing BELT-US-1 parts" '```'
+assert "a wide fence line stays within the width" test "$(max_width "$TMP/md.out")" -le 60
+assert "a wide fence line breaks between words, not inside one" sh -c "grep -qF 'docs/agents/issue-tracker.md' '$TMP/md.out' && grep -qF 'docs/agents/triage-labels.md' '$TMP/md.out' && grep -qF 'BELT-US-1' '$TMP/md.out'"
+assert "a wide fence line goes on hanging lines" test "$(grep -c '^  │       [a-zB]' "$TMP/md.out")" -ge 1
+printf '%s\n' "As a student, I want to submit my belt when all objectives are validated, instead of waiting for someone to notice it." "  - when objectives are missing, the submission is refused, and the refusal lists the missing objectives" "**not** markdown" | tuto_wrap 60 "  " >"$TMP/wrap.out"
+assert "tuto_wrap keeps every line within the width" test "$(max_width "$TMP/wrap.out")" -le 60
+assert "tuto_wrap loses no word" sh -c "[ \"\$(tr -s ' \n' '  ' <'$TMP/wrap.out' | sed 's/^ *//;s/ *$//')\" = 'As a student, I want to submit my belt when all objectives are validated, instead of waiting for someone to notice it. - when objectives are missing, the submission is refused, and the refusal lists the missing objectives **not** markdown' ]"
+assert "tuto_wrap hangs a wrapped line past its own indent" grep -q '^      [a-z]' "$TMP/wrap.out"
+assert "tuto_wrap prints text as typed (no markdown)" grep -qF '  **not** markdown' "$TMP/wrap.out"
 _md 80 '| Role | Meaning |' '|---|---|' '| `needs-triage` | a human must evaluate it |' '| `wontfix` | will not be done |'
 assert "a narrow table is aligned in columns" grep -qF '`wontfix`      │ will not be done' "$TMP/md.out"
 assert "a table header is ruled off" grep -qF '─┼─' "$TMP/md.out"
@@ -408,6 +417,9 @@ assert_out "$TMP/a1.log" "12 steps played, every check green; 7 of them replayed
 assert "every agent step is flagged SIMULATED" test "$(grep -c '^  ┌─ SIMULATED ─ replay of a real' "$TMP/a1.log")" -eq 7
 assert "every agent step closes its SIMULATED frame" test "$(grep -c '^  └─ SIMULATED ─' "$TMP/a1.log")" -eq 7
 assert "no check failed" sh -c "! grep -q '✗' '$TMP/a1.log'"
+awk '/^Runs for real:/ { on = 1; next } /^  ┌─ SIMULATED|^Check \(runs/ { on = 0 } on' "$TMP/a1.log" >"$TMP/a1-actions.log"
+assert "the A1 run shows action output" grep -qF 'business-backlog/BELT-US-1-' "$TMP/a1-actions.log"
+assert "action output is wrapped, never cut with …" sh -c "! grep -q '…\$' '$TMP/a1-actions.log'"
 for _cmd in "> /build-factory" "> /verify-factory" "> /grill-with-docs" "> /to-spec" "> /to-tickets" "> /implement" "\$ curl -fsSL"; do
   assert_out "$TMP/a1.log" "$_cmd"
 done
