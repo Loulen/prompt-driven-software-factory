@@ -1,0 +1,17 @@
+{
+  "name": "blackbelt-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Blackbelt, lite: consultants grow belt by belt in a discipline, coached by a mentor.",
+  "type": "module",
+  "bin": {
+    "blackbelt": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "start": "node src/cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

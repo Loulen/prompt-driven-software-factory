@@ -42,6 +42,36 @@ reconstruit `CONTEXT.md` et les ADR depuis le code : prévoir une demi-journée)
 driver agentique qui se lance, labels de triage, scaffold et context présents, santé git-flow. Il
 rapporte, propose de corriger ce qui manque, et signale l'étape suivante — **sans jamais bloquer**.
 
+## Tutoriel
+
+Pour découvrir PDSF sans risque : **un seul parcours, environ 10 minutes, zéro token**. Une commande
+crée un espace de travail autour d'un petit projet réaliste (**Blackbelt lite**), puis ouvre le
+tutoriel dans ton terminal :
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh | sh
+```
+
+Tu tapes les vraies commandes : `curl … install.sh | sh` (le vrai installeur), `code .`, `claude`,
+`/help`, `/build-factory` deux fois (avec `/clear` entre les deux : une session par passe, un
+contexte court), puis `/verify-factory`. Les fichiers et les commits sont réels. L'agent, lui, est
+**simulé** : `claude` ouvre une copie de Claude Code dans le tutoriel, qui rejoue des enregistrements
+de vrais runs des skills. Ton vrai `claude` n'est jamais lancé. Un **coach** en bas de l'écran
+te dit quoi faire, en deux lignes au plus, et montre ta progression.
+
+En **bonus** (environ 3 minutes, `s` pour passer) : ta première feature. Tu prends la story
+Belt US-1 du backlog métier et tu tapes `/grill-with-docs BELT-US-1` (2 réponses en tout), puis
+`/to-spec`, `/to-tickets` et `/implement`. Le glossaire, la spec, le ticket et le code arrivent
+dans l'espace de travail, commités. Pour finir, `/exit` puis `node --test`, qui tourne pour de vrai
+avec les nouveaux tests de Belt US-1.
+
+Il faut `sh`, `git` et Node 18+. Ctrl-C quitte à tout moment ; relancer la même commande reprend là
+où tu t'étais arrêté. L'espace de travail reste dans `~/pdsf-tutorial/blackbelt`.
+
+Pour une branche en recette : `curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/<branche>/tutorial/tutorial.sh | PDSF_REF=<branche> sh`.
+Hors-ligne depuis un checkout : `PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails,
+format du scénario et ré-enregistrement : **[`tutorial/README.md`](tutorial/README.md)** (en anglais).
+
 ## Pourquoi cette usine ?
 
 Depuis quelque temps, les outils qui accompagnent notre développement évoluent, voire sont
@@ -214,11 +244,12 @@ prompt-driven-factory/
 ├── README.md                       ← ce fichier (méthode + genèse)
 ├── CONTEXT.md                      ← glossaire de l'usine (langage de référence)
 ├── docs/
-│   ├── adr/                        ← décisions structurantes (ADR-0001…0005)
+│   ├── adr/                        ← décisions structurantes (ADR-0001…0006)
 │   ├── agents/                     ← config backlogs / triage / domaine
 │   ├── test-scenarios/             ← Happy Paths (≤ 3)
 │   └── assets/                     ← schémas de la méthode
 ├── .claude-plugin/                 ← canal plugin (marketplace.json, plugin.json)
+├── tutorial/                       ← le tutoriel (script d'entrée, app terminal, scénario + enregistrements, fixture blackbelt-lite) — jamais installé
 └── skills/
     ├── build-factory/              ← amorçage (backlogs, triage, issue-tracker-{github,gitlab,local}…)
     ├── verify-factory/             ← health check

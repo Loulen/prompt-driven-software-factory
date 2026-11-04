@@ -48,9 +48,10 @@ ENVIRONMENT (each also asked interactively when unset; set it to skip the prompt
   PDSF_SRC       Local PDSF checkout to install FROM (its skills/, CONTEXT.md, docs/).
                  When set, the installer runs fully OFFLINE — no clone, no download.
                  When unset, the repo is fetched (git --depth 1 clone, else curl tarball).
-  PDSF_HARNESS   Target harness: `generic` (default) or `claude`.
-                 generic = regular skills under .agents/skills/ + a wired AGENTS.md — read by
-                 most harnesses, Copilot included. claude = the generic install plus a symlink
+  PDSF_HARNESS   Harness layout: `generic` (default) or `claude`.
+                 generic = ".agents": regular skills under .agents/skills/ + a wired AGENTS.md —
+                 read by most harnesses, Copilot included.
+                 claude  = ".agents + .claude symlinks": the generic install plus a symlink
                  overlay (.claude/skills -> .agents/skills, CLAUDE.md -> AGENTS.md).
   PDSF_MONOREPO  `y`/`n` — install a self-contained factory per context (.factory/<ctx>/)?
                  Default: n (single-project install).
@@ -159,6 +160,28 @@ write_block() {
     if [ -f "$_file" ] && [ -s "$_file" ]; then printf '\n'; fi
     printf '%s\n%s\n%s\n' "$BEGIN_MARK" "$_body" "$END_MARK"
   } >> "$_file"
+}
+
+# ---------------------------------------------------------------------------- harness
+
+# The harness question names each option by what it writes. PDSF_HARNESS keeps its values:
+# `generic` (= option 1) and `claude` (= option 2).
+HARNESS_PROMPT="Harness layout?
+  [1] .agents                     generic: skills in .agents/skills/ + a wired AGENTS.md
+                                  (read by Copilot, Cursor, Codex, Claude Code…)
+  [2] .agents + .claude symlinks  the same, plus .claude/skills -> .agents/skills and
+                                  CLAUDE.md -> AGENTS.md (Claude Code's own paths)
+Choice [1/2] (1): "
+
+# ask_harness — sets _harness to `generic` or `claude` (from PDSF_HARNESS, else the prompt).
+ask_harness() {
+  _harness=$(ask PDSF_HARNESS "$HARNESS_PROMPT" "generic")
+  case "$_harness" in
+    1|generic|.agents) _harness=generic ;;
+    2|claude) _harness=claude ;;
+    copilot) _harness=generic; log "Copilot is covered by the generic install (AGENTS.md)." ;;
+    *) die "unknown harness '$_harness' (generic|claude, or 1|2)";;
+  esac
 }
 
 # ---------------------------------------------------------------------------- source resolution
@@ -393,12 +416,7 @@ Pass a target dir:  sh install.sh /path/to/your/project"
     die "source and target are the same directory ($_target) — pass a different target."
   fi
 
-  _harness=$(ask PDSF_HARNESS "Target harness? [claude/generic] (generic): " "generic")
-  case "$_harness" in
-    claude|generic) ;;
-    copilot) _harness=generic; log "Copilot is covered by the generic install (AGENTS.md)." ;;
-    *) die "unknown harness '$_harness' (claude|generic)";;
-  esac
+  ask_harness
 
   _mono=$(ask PDSF_MONOREPO "Monorepo (a self-contained factory per context)? [y/N]: " "n")
   if is_yes "$_mono"; then
@@ -423,12 +441,7 @@ resident_flow() {
   log "resident tool — monorepo root: $_root"
 
   _action=$(ask PDSF_ACTION "Action? [1] create a factory  [2] wire sub-folders  (1): " "1")
-  _harness=$(ask PDSF_HARNESS "Target harness? [claude/generic] (generic): " "generic")
-  case "$_harness" in
-    claude|generic) ;;
-    copilot) _harness=generic; log "Copilot is covered by the generic install (AGENTS.md)." ;;
-    *) die "unknown harness '$_harness' (claude|generic)";;
-  esac
+  ask_harness
 
   case "$_action" in
     2|wire)

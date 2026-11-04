@@ -1,0 +1,728 @@
+{
+  "format": 2,
+  "title": "PDSF tutorial",
+  "intro": {
+    "header": "Intro",
+    "card": {
+      "title": "P D S F  ·  build your software factory",
+      "milestones": [
+        "install PDSF",
+        "/build-factory ×2",
+        "/verify-factory"
+      ],
+      "lines": [
+        {
+          "dim": "~10 min · 0 token"
+        },
+        "",
+        {
+          "simulated": "You type the real commands. The agent is SIMULATED."
+        },
+        {
+          "dim": "Workspace: {ws} (a git repo)"
+        }
+      ],
+      "footer": "Ctrl-C quits at any time · re-run the command to resume where you stopped"
+    },
+    "coach": [
+      "Build an agentic software factory on a real project.",
+      "About 10 min · no token spent · nothing installed outside its workspace."
+    ],
+    "cta": "Enter ↵ start"
+  },
+  "chapters": [
+    {
+      "id": "factory",
+      "title": "Build the factory",
+      "steps": [
+        {
+          "id": "install",
+          "kind": "do",
+          "screen": "shell",
+          "expect": "curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/install.sh | sh",
+          "name": "the install command",
+          "accept": "^curl\\s.*install\\.sh\\s*\\|\\s*sh$",
+          "dir": "01-build-the-factory/01-install",
+          "coach": [
+            "This is Blackbelt, a small Node app. First, install PDSF in it.",
+            "Same command you will run on your own project tomorrow."
+          ],
+          "cta": "Type the command (Tab ⇥ fills it in)",
+          "hint": "Press Tab: it types the install command for you. Then Enter.",
+          "done": [
+            "Installed. {skills} skills, one commit. Nothing outside this folder."
+          ]
+        },
+        {
+          "id": "ide",
+          "kind": "do",
+          "screen": "shell",
+          "expect": "code .",
+          "accept": "^(code|code-insiders|cursor|codium|windsurf|zed|subl|idea|webstorm)\\s+\\.$",
+          "skip": "s",
+          "effect": "ide",
+          "coach": [
+            "Open this folder in your IDE, with the file tree and the git graph:",
+            "files and commits will appear there as you go."
+          ],
+          "cta": "Type code .  ·  s skips it (no IDE here)",
+          "hint": "code . opens VS Code. Another IDE? Open the folder in it, then type s.",
+          "done": [
+            "{ide} is open on {ws}. Keep an eye on it."
+          ],
+          "skipped": [
+            "No IDE for now: open {ws} in any editor later."
+          ]
+        },
+        {
+          "id": "claude",
+          "kind": "do",
+          "screen": "shell",
+          "expect": "claude",
+          "effect": "harness",
+          "coach": [
+            "Now start the agent. Here, claude is a stand-in: it replays recorded",
+            "real sessions. 0 token, and your real claude is untouched."
+          ],
+          "cta": "Type claude",
+          "hint": "Type claude, then Enter: the screen switches to the simulated harness.",
+          "done": [
+            "You are in the harness. Same look as Claude Code, but simulated."
+          ]
+        },
+        {
+          "id": "help",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/help",
+          "effect": "help",
+          "coach": [
+            "Ask the harness what it can do: each PDSF skill is a slash command."
+          ],
+          "cta": "Type /help",
+          "hint": "Type /help, then Enter.",
+          "done": [
+            "/build-factory comes first: it sets the factory up on this repo."
+          ],
+          "help": {
+            "build-factory": "wire the backlogs, bootstrap the context",
+            "verify-factory": "health check of the factory",
+            "grill-with-docs": "design a user story with you"
+          },
+          "also": [
+            "to-spec",
+            "to-tickets",
+            "implement"
+          ]
+        },
+        {
+          "id": "scaffold",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/build-factory",
+          "dir": "01-build-the-factory/02-scaffold",
+          "coach": [
+            "Build the factory. The agent will ask you 2 questions about this repo.",
+            "Pick with ↑ ↓ and Enter. The recorded run's answer is preselected."
+          ],
+          "cta": "Type /build-factory",
+          "hint": "Type /build-factory (Tab fills it in), then Enter.",
+          "play": [
+            {
+              "tool": "Bash(git remote -v; ls -la; ls docs docs/agents …)"
+            },
+            {
+              "tool": "Bash(cat README.md business-backlog/README.md …)"
+            },
+            {
+              "say": ""
+            },
+            {
+              "say": "Existing project, no remote. I'll start in Scaffold mode."
+            },
+            {
+              "ask": "A — Business backlog. Where do your user stories live?",
+              "choices": [
+                "business-backlog/ — markdown files (found in the repo)",
+                "Jira",
+                "Notion"
+              ],
+              "pick": 0,
+              "turn": 3
+            },
+            {
+              "ask": "B — Technical backlog. Where should agents write their tickets?",
+              "choices": [
+                ".scratch/ — local markdown (no remote here)",
+                "GitHub Issues (gh)",
+                "GitLab Issues (glab)"
+              ],
+              "pick": 0,
+              "turn": 5
+            },
+            {
+              "say": "Triage labels: the defaults. Domain docs: single context."
+            },
+            {
+              "writes": [
+                {
+                  "path": "docs/agents/business-backlog.md"
+                },
+                {
+                  "path": "docs/agents/issue-tracker.md"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Scaffold done: 2 backlogs wired, {files} files, 1 commit. Look in your IDE."
+          ]
+        },
+        {
+          "id": "why-twice",
+          "kind": "read",
+          "screen": "harness",
+          "tip": {
+            "title": "why twice?",
+            "rows": [
+              {
+                "label": "Session 1  scaffold",
+                "fill": 12,
+                "color": "orange",
+                "note": "context 80% full"
+              },
+              {
+                "label": "/clear",
+                "fill": 0,
+                "note": "empty again"
+              },
+              {
+                "label": "Session 2  context",
+                "fill": 5,
+                "color": "cyan",
+                "note": "one job, focused"
+              }
+            ]
+          },
+          "coach": [
+            "Next step in a fresh session: a short context means a focused agent.",
+            "Less context, fewer hallucinations. /clear, then /build-factory again."
+          ],
+          "cta": "Enter ↵ got it"
+        },
+        {
+          "id": "clear",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/clear",
+          "effect": "clear",
+          "coach": [
+            "Start a fresh session: clear the agent's context."
+          ],
+          "cta": "Type /clear",
+          "hint": "Type /clear, then Enter. It empties the session, not your files.",
+          "done": [
+            "Context cleared. The agent forgot this session; files and commits stay.",
+            "Now run /build-factory again: it sees the scaffold is done, moves on."
+          ]
+        },
+        {
+          "id": "context",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/build-factory",
+          "dir": "01-build-the-factory/03-context",
+          "coach": [
+            "Same command, fresh session: now it builds the domain context.",
+            "The agent will ask you 1 question."
+          ],
+          "cta": "Type /build-factory",
+          "hint": "Type /build-factory again (Tab fills it in), then Enter.",
+          "play": [
+            {
+              "tool": "Bash(cat README.md package.json; for f in src/*.js; do …)"
+            },
+            {
+              "say": "Scaffold is done → Context mode. First, the core language:"
+            },
+            {
+              "ask": "The code says \"belt\" for the rank and for the attempt. What is a Belt?",
+              "choices": [
+                "The attempt; the rank is its Colour (recommended)",
+                "Keep belt for both"
+              ],
+              "pick": 0,
+              "turn": 3
+            },
+            {
+              "say": "(The recorded run went on: 9 more answers, as recommended.)",
+              "style": "dim"
+            },
+            {
+              "writes": [
+                {
+                  "path": "CONTEXT.md",
+                  "note": "glossary: Belt, Colour, Submission, Mentor, Sensei …"
+                },
+                {
+                  "path": "docs/adr/0001-no-dependencies.md"
+                }
+              ],
+              "more": "ADRs"
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Context written: a glossary and {adrs} ADRs. Agents now speak your domain.",
+            "Open CONTEXT.md in your IDE."
+          ]
+        },
+        {
+          "id": "verify",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/verify-factory",
+          "dir": "01-build-the-factory/04-verify-factory",
+          "coach": [
+            "Last one: check the factory's health."
+          ],
+          "cta": "Type /verify-factory",
+          "hint": "Type /verify-factory, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(ls -la; ls docs docs/agents docs/adr; git check-ignore …)"
+            },
+            {
+              "say": "# /verify-factory: Blackbelt (lite)"
+            },
+            {
+              "checks": [
+                "Scaffold present",
+                "Files committed",
+                "Context filled",
+                "Technical backlog",
+                "Business backlog",
+                "Test driver: tmux",
+                "Git-flow: develop",
+                "US template: default"
+              ],
+              "na": "2 n/a (local backlog: no labels, no logins)"
+            },
+            {
+              "say": "Next: /grill-with-docs business-backlog/BELT-US-1-….md"
+            }
+          ],
+          "done": [
+            "🎉 Your factory is built. 8 checks green, {commits} commits."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bonus",
+      "title": "Bonus · first feature",
+      "label": "bonus",
+      "maxAnswers": 3,
+      "card": {
+        "title": "bonus · ~3 min",
+        "width": 76,
+        "lines": [
+          {
+            "bonus": "Your first feature, from the backlog to green tests"
+          },
+          "",
+          {
+            "story": [
+              "BELT-US-1",
+              "Submit my belt for sensei validation"
+            ]
+          },
+          {
+            "flow": [
+              "/grill-with-docs",
+              "/to-spec",
+              "/to-tickets",
+              "/implement",
+              "node --test"
+            ]
+          },
+          "",
+          {
+            "keys": [
+              [
+                "Enter",
+                "play it"
+              ],
+              [
+                "s",
+                "skip to the end"
+              ]
+            ]
+          }
+        ],
+        "coach": [
+          "Bonus · 3 min: take a user story all the way to green tests."
+        ],
+        "cta": "Enter ↵ play the bonus  ·  s skip to the end"
+      },
+      "steps": [
+        {
+          "id": "story",
+          "kind": "read",
+          "screen": "harness",
+          "story": {
+            "file": "business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md",
+            "label": "BELT-US-1 · business-backlog/",
+            "section": "INTENTION"
+          },
+          "coach": [
+            "Belt US-1: a consultant submits their belt once its objectives are done.",
+            "You design it with the agent; it specs, slices and codes it. All for real."
+          ],
+          "cta": "Enter ↵ let's go"
+        },
+        {
+          "id": "grill",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/grill-with-docs BELT-US-1",
+          "dir": "02-use-the-factory/01-grill-with-docs",
+          "coach": [
+            "Design the story with the agent: it grills you, then sharpens the docs.",
+            "It will ask you 2 questions. Pick with ↑ ↓ and Enter."
+          ],
+          "cta": "Type /grill-with-docs BELT-US-1",
+          "hint": "Type /grill-with-docs BELT-US-1 (Tab fills it in), then Enter.",
+          "play": [
+            {
+              "tool": "Bash(cat business-backlog/*US-1*; cat CONTEXT.md; ls docs/adr; …)"
+            },
+            {
+              "tool": "Bash(git checkout -b integration/BELT-US-1-submit-belt-for-vali…)"
+            },
+            {
+              "say": ""
+            },
+            {
+              "say": "Round 1: 7 questions, each with my recommendation. Among them:"
+            },
+            {
+              "say": "  Q2 \"holds the belt\" clashes with the glossary → \"the belt's consultant\"",
+              "style": "dim"
+            },
+            {
+              "say": "  Q3 does a submission name a sensei? → no: any sensei decides",
+              "style": "dim"
+            },
+            {
+              "say": "  Q4 which refusal wins? → ownership, status, then the objectives",
+              "style": "dim"
+            },
+            {
+              "ask": "Answer each one, or just agree with my recommendations.",
+              "choices": [
+                "All ok, as you recommend.",
+                "All ok, but submit names one sensei (Q3)",
+                "All ok, but rule 4 gets its own message (Q1)"
+              ],
+              "pick": 0,
+              "turn": 3
+            },
+            {
+              "tool": "Bash(python3 - <<'EOF')",
+              "note": "CONTEXT.md: Belt, Submission"
+            },
+            {
+              "say": "We agree on everything. No ADR: none of these decisions needs one."
+            },
+            {
+              "ask": "Should I commit the CONTEXT.md change on the integration branch?",
+              "choices": [
+                "Yes, commit it. Next skills: go with your recommendations",
+                "Not yet, I want to reread CONTEXT.md"
+              ],
+              "pick": 0,
+              "turn": 5
+            },
+            {
+              "writes": [
+                {
+                  "path": "CONTEXT.md",
+                  "note": "the belt's consultant · any sensei decides"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Designed: the glossary is sharpened, on a new integration/ branch.",
+            "Open CONTEXT.md in your IDE: that is what the agent will build on."
+          ]
+        },
+        {
+          "id": "spec",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/to-spec",
+          "dir": "02-use-the-factory/02-to-spec",
+          "coach": [
+            "Turn the grilling into a spec on the technical backlog. No questions:",
+            "you told the agent to go with its recommendations."
+          ],
+          "cta": "Type /to-spec",
+          "hint": "Type /to-spec, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(cat docs/agents/issue-tracker.md docs/agents/triage-labels.md; …)"
+            },
+            {
+              "say": "Test seams: the two that exist, the domain and the CLI. No new one."
+            },
+            {
+              "writes": [
+                {
+                  "path": ".scratch/belt-submission/SPEC.md",
+                  "note": "ready-for-agent"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Spec written: .scratch/belt-submission/SPEC.md, story moved to In design."
+          ]
+        },
+        {
+          "id": "tickets",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/to-tickets",
+          "dir": "02-use-the-factory/03-to-tickets",
+          "coach": [
+            "Slice the spec into tickets an agent can take, one at a time."
+          ],
+          "cta": "Type /to-tickets",
+          "hint": "Type /to-tickets, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(mkdir -p .scratch/belt-submission/tickets; cat > …)"
+            },
+            {
+              "say": "One ticket: one domain operation plus one CLI command, shipped together."
+            },
+            {
+              "writes": [
+                {
+                  "path": ".scratch/belt-submission/tickets/01-submit-belt.md",
+                  "note": "ready-for-agent"
+                },
+                {
+                  "path": "business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md",
+                  "note": "links back"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "1 ticket, ready for an agent. The business story links back to it."
+          ]
+        },
+        {
+          "id": "implement",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/implement",
+          "dir": "02-use-the-factory/04-implement",
+          "coach": [
+            "Implement the ticket: tests first, then the code, then a review."
+          ],
+          "cta": "Type /implement",
+          "hint": "Type /implement, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(git checkout -q -b feature/01-submit-belt && …)"
+            },
+            {
+              "tool": "Skill(tdd)"
+            },
+            {
+              "say": "The seams are the two from the spec, which you already approved."
+            },
+            {
+              "tool": "Bash(python3 - <<'EOF')",
+              "note": "a test first"
+            },
+            {
+              "tool": "Edit(src/blackbelt.js)",
+              "note": "then the code"
+            },
+            {
+              "tool": "Bash(node --test test/blackbelt.test.js 2>&1 | grep -E '^# (pass|fail)')",
+              "note": "red → green"
+            },
+            {
+              "say": "Cycles 3 to 6: ownership, status, objectives, then the CLI seam.",
+              "style": "dim"
+            },
+            {
+              "say": "40/40 tests pass. Review and Feature Path, each in its own subagent:"
+            },
+            {
+              "tool": "Agent(Independent code review of diff)",
+              "note": "nothing blocking"
+            },
+            {
+              "tool": "Agent(Run Feature Path agentic test)",
+              "note": "all 6 steps pass",
+              "style": "green"
+            },
+            {
+              "writes": [
+                {
+                  "path": "src/blackbelt.js"
+                },
+                {
+                  "path": "src/cli.js"
+                },
+                {
+                  "path": "test/blackbelt.test.js"
+                },
+                {
+                  "path": "test/cli.test.js"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Code written. Do not take the agent's word for it: run the tests yourself."
+          ]
+        },
+        {
+          "id": "tests",
+          "kind": "do",
+          "screen": "shell",
+          "expect": "node --test",
+          "effect": "test",
+          "dir": "02-use-the-factory/05-tests",
+          "coach": [
+            "Leave the agent with /exit, then run the tests yourself: node --test.",
+            "They run for real, in your workspace."
+          ],
+          "cta": "Type /exit, then node --test",
+          "hint": "In the harness, type /exit. Then in the shell, node --test.",
+          "done": [
+            "{pass}/{tests} green, {fresh} new. A user story went from the backlog to code."
+          ]
+        }
+      ]
+    }
+  ],
+  "end": {
+    "header": "Done",
+    "card": {
+      "lines": [
+        {
+          "ok": "✓ Factory built  ·  8 checks green  ·  {commits} commits"
+        },
+        "",
+        {
+          "ok": "Tomorrow, on your project"
+        },
+        "",
+        {
+          "cmd": "$ curl -fsSL …/main/install.sh | sh"
+        },
+        {
+          "cmd": "$ claude   then  /build-factory"
+        },
+        {
+          "dim": "(the full install command is printed when you quit)"
+        },
+        "",
+        {
+          "link": [
+            "Docs   ",
+            "github.com/Loulen/prompt-driven-software-factory"
+          ]
+        },
+        {
+          "link": [
+            "Install",
+            "…/docs/INSTALL.md"
+          ]
+        },
+        "",
+        {
+          "dim": "Your workspace stays in {ws}"
+        }
+      ]
+    },
+    "coach": [
+      "That's it. Tomorrow, on your project: install, then /build-factory."
+    ],
+    "cta": "q quit  ·  r restart"
+  },
+  "texts": {
+    "asking": [
+      "The agent is asking you a question ({n}/{total}).",
+      "Pick an answer with ↑ ↓, then Enter. The recorded answer is preselected."
+    ],
+    "askingCta": "↑ ↓ choose  ·  Enter ↵ answer",
+    "offPath": "↳ Not the recorded answer: noted. The replay goes on with answer {pick}.",
+    "workingCta": "any key ⏩ fast-forward",
+    "doneCta": "Enter ↵ next",
+    "almost": [
+      "Almost: {name} is the one we need here."
+    ],
+    "needHarness": [
+      "This one runs in the harness: type claude first."
+    ],
+    "needShell": [
+      "This one runs in the shell: type /exit first."
+    ],
+    "leftHarness": [
+      "You left the simulated harness. Type claude to go back."
+    ],
+    "stuck": [
+      "Stuck? The tutorial can do this step for you."
+    ],
+    "stuckCta": "Enter ↵ do it for me  ·  any other key: I'll type it",
+    "resumed": "↻ Resumed at step {n}/{total}: your workspace kept its files and commits.",
+    "checkFailed": [
+      "This step's check failed (✗ lines above). Your workspace is intact."
+    ],
+    "checkFailedCta": "Enter ↵ quit",
+    "shellBanner": "PDSF tutorial workspace · {ws} · real shell commands, real git",
+    "shellUnknown": "tutorial shell: {cmd}: not available here (try ls, cat, git log)",
+    "shellCd": "tutorial shell: this shell stays in the workspace",
+    "simulatedReply": "(simulated) This stand-in only replays recorded sessions: no model is called.",
+    "notRecorded": "(simulated) {cmd} is not recorded here. On your project, it runs for real.",
+    "noIde": "tutorial shell: {cmd}: command not found. Open the folder in your IDE by hand.",
+    "harnessTitle": "Claude Code",
+    "harnessLines": [
+      "recorded real sessions · 0 token · no agent",
+      "cwd: {ws}"
+    ],
+    "harnessHint": "? shortcuts · this claude is a stand-in: your real claude is untouched"
+  }
+}
