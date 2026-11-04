@@ -103,7 +103,7 @@ assert_out "$TMP/journey.log" "[ q quit  ·  r restart ]"
 assert_out "$TMP/journey.log" "curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/install.sh | sh"
 assert "the workspace is a git repo, on develop" test "$(git -C "$WS" symbolic-ref --short HEAD)" = develop
 assert "main holds the fixture's initial commit only" test "$(git -C "$WS" log --format=%s main)" = "Blackbelt (lite): initial commit"
-assert "develop: install, scaffold, context — committed for real" test "$(git -C "$WS" log --format=%s main..develop | tr '\n' '~')" = "Bootstrap project context: glossary + foundational ADRs~Wire the agentic factory: ports, method constants, scaffold~Install PDSF 0.5.0~"
+assert "develop: install, scaffold, context — committed for real" test "$(git -C "$WS" log --format=%s main..develop | tr '\n' '~')" = "Bootstrap project context: glossary + foundational ADRs~Wire the agentic factory: ports, method constants, scaffold~Install PDSF 0.6.0~"
 assert "the skills and AGENTS.md are in the workspace" sh -c "[ -f '$WS/.agents/skills/build-factory/SKILL.md' ] && grep -q 'PDSF:BEGIN' '$WS/AGENTS.md'"
 assert "the .claude overlay: symlinks only" sh -c "[ \"\$(readlink '$WS/.claude/skills')\" = ../.agents/skills ] && [ \"\$(readlink '$WS/CLAUDE.md')\" = AGENTS.md ]"
 assert "the ports are in docs/agents/" test -f "$WS/docs/agents/issue-tracker.md"
