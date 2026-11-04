@@ -120,18 +120,24 @@ export class Blackbelt {
     return objective;
   }
 
-  // The belt's consultant hands their in-progress belt over for a sensei's decision.
+  // The belt's consultant hands their finished belt over for a sensei's decision.
+  // Check order matters: ownership first, so a refusal never reveals another consultant's
+  // objectives; status before objectives, since a submitted belt's objectives are frozen and
+  // listing them would mislead. "No objective" is unreachable from the CLI today (a belt only
+  // goes in progress with its first objective) but stays explicit.
   submitBelt(beltId, consultantId) {
     const belt = this.getBelt(beltId);
     if (belt.consultantId !== consultantId) {
       throw new DomainError(`only the belt's consultant (${belt.consultantId}) can submit it`);
     }
-    if (belt.status !== BELT_STATUSES.IN_PROGRESS) throw new DomainError(`cannot submit a belt in ${belt.status}`);
-    if (belt.objectives.length === 0) throw new DomainError(`belt ${beltId} has no objective`);
+    if (belt.status !== BELT_STATUSES.IN_PROGRESS) {
+      throw new DomainError(`belt ${belt.id} is ${belt.status}: only a belt in progress can be submitted`);
+    }
+    if (belt.objectives.length === 0) throw new DomainError(`belt ${belt.id} has no objective`);
     const remaining = belt.objectives.filter((objective) => objective.status !== OBJECTIVE_STATUSES.VALIDATED);
-    if (remaining.length > 0) {
+    if (remaining.length) {
       const list = remaining.map((objective) => `${objective.id}. ${objective.label}`).join('; ');
-      throw new DomainError(`belt ${beltId} has objectives still to validate: ${list}`);
+      throw new DomainError(`belt ${belt.id} has objectives still to validate: ${list}`);
     }
     this.#move(belt, BELT_STATUSES.NEED_VALIDATION);
     return belt;

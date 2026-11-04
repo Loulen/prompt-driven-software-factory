@@ -4,45 +4,47 @@ You are node `XBG5Cxkn` in pipeline `implement-loop`, iteration 1.
 
 ## Inputs
 
-- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/output.md`
-- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/b4kko9SV/iter-1/out/output.md`
+- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/output.md`
+- `in`: read `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/b4kko9SV/iter-1/out/output.md`
 
 ## Input Images
 
 The following images were uploaded alongside the text prompt. Use the Read tool to view them:
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-01-before.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-02-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-02-before.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-05-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-06-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-06-asking.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-06-before.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-07-before.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-08-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-09-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-10-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-11-before.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-12-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-12-asking.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-13-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-14-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-15-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-16-after.png`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/v2-t-17-before.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-01-before.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-02-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-02-before.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-05-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-06-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-06-asking.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-06-before.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-07-before.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-08-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-09-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-10-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-11-before.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-12-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-12-asking.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-13-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-14-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-15-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-16-after.png`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/v2-t-17-before.png`
 
 ## Input Files
 
 The following files were passed to the entry node alongside the text prompt (the run's attachments). Read them as part of your input:
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/chosen-design.md`
-- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/_input/spec-plan-iter2.md`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/chosen-design.md`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/fp-report-21.md`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/impl-report-21.md`
+- `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/_input/spec-plan-iter2.md`
 
 ## Outputs
 
-- `out`: write to `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree/.pdo/artifacts/XBG5Cxkn/iter-1/out/output.md`
+- `out`: write to `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree/.pdo/artifacts/XBG5Cxkn/iter-1/out/output.md`
 
 ## Source code edits
 
-Your working directory `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-095354-745baf1/worktree` is the **run's shared worktree**: other nodes of this run may work in it at the same time. Make **all** source code edits there — do not `cd` elsewhere to edit files.
+Your working directory `/home/ubuntu/prompt-driven-software-factory/.pdo/runs/20261104-102700-9fbe78d/worktree` is the **run's shared worktree**: other nodes of this run may work in it at the same time. Make **all** source code edits there — do not `cd` elsewhere to edit files.
 
 You do not have to run any git command. When this node finishes, PDO keeps whatever you committed yourself and commits everything else you left behind onto the run's branch. Anything the repository's `.gitignore` covers stays out, and so does PDO's own `.pdo/artifacts/`; everything else goes in.
 

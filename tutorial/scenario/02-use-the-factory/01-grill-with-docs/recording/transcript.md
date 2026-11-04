@@ -1,121 +1,127 @@
 ---
 step: 02-use-the-factory/01-grill-with-docs
-command: /grill-with-docs
-branch: integration/BELT-US-1-submit-my-belt-for-sensei-validation
-commit: BELT-US-1 grilling: sharpen Submission, Belt and Objective in the glossary
+command: /grill-with-docs BELT-US-1
+branch: integration/BELT-US-1-submit-belt-for-validation
+commit: BELT-US-1 grilling: belt's consultant, submission to any sensei
 session: new
 via:
 merge:
 branches:
 removed:
-recorded: 2026-11-03
-recorder: Claude Code 2.1.284, claude-opus-5-5
-pdsf: b6456d7
+recorded: 2026-11-04
+recorder: Claude Code 2.1.317, claude-opus-5-5
+pdsf: b3d45f4
 harness: claude
 format: 1
 ---
 
-# Recording — Grill the business story (`/grill-with-docs`)
+# Recording — Grill the business story (`/grill-with-docs BELT-US-1`)
 
 A real run of the PDSF skill on a fresh blackbelt-lite tutorial workspace, recorded with
-`tutorial/maintainers/record/record.sh`. The files it produced are in `files/`. Format and re-recording
-procedure: `tutorial/README.md` § Recordings.
+`tutorial/maintainers/record/record.sh`. The files it produced are in `files/`. Format and
+re-recording procedure: `tutorial/README.md` § Recordings.
 
 <!-- pdsf-turn: learner -->
 ### You
 
-/grill-with-docs business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md
+/grill-with-docs BELT-US-1
 
 <!-- pdsf-turn: agent -->
 ### Agent
 
 ⏺ Skill(grilling)
 ⏺ Skill(domain-modeling)
-⏺ Bash(cat business-backlog/BELT-US-1-*.md; echo ----; cat CONTEXT.md; ls d…)
-⏺ Bash(cat docs/adr/*.md; for f in src/*.js; do echo "=== $f"; cat $f; done…)
-⏺ Bash(git checkout -b integration/BELT-US-1-submit-my-belt-for-sensei-vali…)
+⏺ Bash(ls; ls business-backlog; cat business-backlog/*US-1*; cat CONTEXT.md; ls docs/adr; cat do…)
+⏺ Bash(cat docs/adr/*; find src test data -type f | head -50; cat package.json; wc -l $(find src…)
+⏺ Bash(cat src/*.js data/seed.json)
+⏺ Bash(git status -sb; git remote -v; git checkout -b integration/BELT-US-1-submit-belt-for-vali…)
 
-I've created `integration/BELT-US-1-submit-my-belt-for-sensei-validation` from `develop`, and the docs from this session will be written there. I read the story against `CONTEXT.md`, the 3 ADRs and the code. Most of it already fits: the `IN_PROGRESS → NEED_VALIDATION` transition exists in `workflow.js`, objectives are already frozen outside `IN_PROGRESS`, and `decide` works with any sensei. What's missing is the submit command and its rules.
+I've read BELT-US-1, `CONTEXT.md`, the 3 ADRs and the code (`src/blackbelt.js`, `src/workflow.js`, `src/cli.js`, seed). I created the integration branch `integration/BELT-US-1-submit-belt-for-validation` from `develop`. There's no remote, so `develop` is as up to date as it can be.
+
+**What the code shows:**
+- The workflow already allows `IN_PROGRESS → NEED_VALIDATION`. No method uses it yet, so `submit` only needs to be wired up.
+- A belt becomes `IN_PROGRESS` only when its first objective is added. So an in-progress belt always has at least one objective.
+- The seed matches the acceptance criteria: B-3 is Linus's cloud WHITE belt with both objectives validated, and B-2 is Ada's craft ORANGE belt with objective 2 "Run a refactoring workshop" still to do.
 
 ## Round 1
 
-❓ **Q1 - Does a submission go to one named sensei?** The glossary says a submission "hands it to **a** sensei". The story says "awaits **the** sensei's validation". The code lets **any** sensei run `decide`. So either:
-(a) the submission goes to every sensei, and any of them can decide, or
-(b) the consultant (or the system) names one sensei when submitting.
+❓ **Q1** - **Rule 4 can never fire on its own**: Belts with no objective are always `REQUESTED` or `MENTOR_ASSIGNED`, so rule 3 already refuses them. Should rule 4 have its own refusal (for example `refused: belt B-4 has no objective`), or does rule 3's message cover it (`belt B-4 is REQUESTED, only an IN_PROGRESS belt can be submitted`)?
 
-➡️ (a). Nothing in the story asks for picking a sensei, notifying one is out of scope, and the code already works this way. I'd change the glossary entry to "hands it over for a sensei's decision" so it doesn't suggest one particular sensei.
+➡️ Rule 3's message covers it. Keep rule 4 as a guard in the domain so the invariant is explicit, but don't promise a separate CLI message. The spec should say rule 4 can't be reached through the CLI today.
 
-❓ **Q2 - "Holds" means two different things.** Rule 2 says "the consultant who **holds** the belt". The glossary uses *holds* for a colour you have earned: "holds a colour once a belt of that colour is validated". With an in-progress belt, Linus doesn't *hold* anything yet.
+❓ **Q2** - **"Holds the belt" clashes with the glossary**: Rule 2 says "the consultant who **holds** the belt". In `CONTEXT.md`, a consultant *holds a colour* only once a belt of that colour is validated. An in-progress belt isn't "held" in that sense. Which phrasing should we use?
+- (a) "the belt's consultant": the consultant the belt belongs to
+- (b) redefine "holds" to cover both meanings
 
-➡️ Call it **the belt's consultant**, as the code does with `belt.consultantId`, and add "_Avoid_: holder, owner (of a belt)" to the **Belt** entry so *hold* only ever applies to colours.
+➡️ (a). Rule 2 becomes "Only the belt's consultant submits it", and "hold" stays reserved for colours. I'd also add "_Avoid_: holding a belt" to the Belt entry.
 
-❓ **Q3 - What does the command look like?** The existing commands put the person doing the action last: `validate-objective <belt> <objective> <mentor>` and `decide <belt> <sensei> …`.
+❓ **Q3** - **Does a submission name a specific sensei?** The glossary says a submission "hands it to **a** sensei". Today `decide` accepts any sensei. Should `submit` pick one (`submit B-3 linus margaret`), or does the belt go into a shared queue that any sensei can decide?
 
-➡️ `submit <belt> <consultant>`, for example `submit B-3 linus`. On success it prints `B-3: NEED_VALIDATION`, the same way `decide` prints `B-1: VALIDATED`.
+➡️ Shared queue: `submit <belt> <consultant>`, with no sensei named. Picking one would bring in assignment rules that the story doesn't ask for. I'd change the glossary to "hands it over for a sensei's decision".
 
-❓ **Q4 - Rule 4 ("no objective") can't happen today.** A belt only enters `IN_PROGRESS` when its first objective is added, and objectives can't be removed. So any belt with zero objectives is `REQUESTED` or `MENTOR_ASSIGNED`, and rule 3 already refuses it.
-(a) Keep rule 4 as a rule in the domain, checked explicitly with its own message ("belt B-x has no objective"), or
-(b) treat it as covered by rule 3 and don't add a separate check or test.
+❓ **Q4** - **Order of the checks**: When several rules are broken at once, which refusal wins? For example, Ada submits Linus's belt that still has objectives to do. Proposed order:
+1. Ownership (rule 2)
+2. Status (rule 3)
+3. No objective (rule 4)
+4. Remaining objectives (rule 1)
 
-➡️ (a), as one cheap explicit guard. The story states it as a business rule, and it would still hold if objectives ever became removable. I'll also record it in the glossary: "a belt in progress always has at least one objective."
+➡️ That order. Ownership comes first so a non-owner doesn't learn anything about someone else's belt. Status comes before objectives because a belt that's already submitted has frozen objectives, so listing them would mislead.
 
-❓ **Q5 - Which refusal wins when several rules fail?** Example: Ada submits Linus's belt while it's already `NEED_VALIDATION`.
+❓ **Q5** - **Format of the rule 1 refusal (part of the CLI contract, ADR-0003)**: The message has to name the remaining objectives. Should it include ids and labels or labels only, and how should multiple objectives be separated?
 
-➡️ Check in this order: belt exists → caller is the belt's consultant (rule 2) → status is `IN_PROGRESS` (rule 3) → has objectives (rule 4) → all objectives validated (rule 1). This way a non-owner learns nothing about someone else's objectives, and the list of remaining objectives only appears when it's the last thing blocking. The story's examples all come out as written in this order.
+➡️ `refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop`, with multiple objectives separated by `; `. Labels are free text and can contain commas. The id helps the mentor run `validate-objective`.
 
-❓ **Q6 - How is the rule 1 refusal worded?** Per ADR-0003 it goes on stderr as a single `refused: <reason>`, and it has to name the remaining objectives.
+❓ **Q6** - **Success output and status name**: The glossary says "awaiting validation" but the code and CLI say `NEED_VALIDATION`. Should we rename the status (a CLI contract change), or keep it? And what should success print?
 
-➡️ One line with each remaining objective's id and label, separated by `; `:
-`refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop`
-The id lets the mentor act on it directly with `validate-objective`.
+➡️ Keep `NEED_VALIDATION`; renaming is a separate story. Success prints `B-3: NEED_VALIDATION`, the same shape as `decide`. Add a `submit <belt> <consultant>` line to USAGE.
 
-❓ **Q7 - How is the rule 3 refusal worded?** The generic `#move` message would print `belt B-3 cannot go from NEED_VALIDATION to NEED_VALIDATION`, which is confusing.
+❓ **Q7** - **Record anything on submission?** For example a `submittedAt` date or who submitted. Nothing in the story reads it.
 
-➡️ A specific message in the style of `add-objective`'s: `refused: cannot submit a belt in NEED_VALIDATION`.
+➡️ No, the status change is enough. Adding unused fields is speculative.
 
-❓ **Q8 - Do we need an ADR?** I can't name a concrete mistake that a competent agent would make without one and that the tests or code wouldn't catch. Every decision above is either a glossary entry or part of the CLI contract, which the spec and tests will pin down.
-
-➡️ No ADR. I'll update `CONTEXT.md` only (Submission, Belt, Objective).
-
-Answer by number. "ok" accepts my recommendation.
+Answer each one, or just say "agree" to the ones you accept.
 
 <!-- pdsf-turn: learner -->
-<!-- pdsf-choices: All ok, but write an ADR for the refusal order | 1 (b): the consultant names a sensei, the rest ok -->
+<!-- pdsf-choices: All ok, but submit names one sensei (Q3) | All ok, but rule 4 gets its own message (Q1) -->
 ### You
 
-All ok: 1 (a), 2, 3, 4 (a), 5, 6, 7, and 8 no ADR.
+All ok, as you recommend.
 
 <!-- pdsf-turn: agent -->
 ### Agent
 
 ⏺ Bash(python3 - <<'EOF')
 
-I've updated `CONTEXT.md` on `integration/BELT-US-1-submit-my-belt-for-sensei-validation`. It's not committed yet.
+We agree on everything, so the grilling is done. I made two edits to `CONTEXT.md` on `integration/BELT-US-1-submit-belt-for-validation`. They aren't committed yet.
 
-- **Belt:** adds the term **the belt's consultant**. Its *Avoid* line now covers "holder"/"owner", so *hold* only ever refers to a colour.
-- **Submission:** the belt's consultant hands the belt over for a sensei's decision. They can only do this when the belt has objectives and all of them are validated. The submission names no particular sensei; any sensei can decide.
-- **Objective:** a belt in progress always has at least one objective.
+- **Belt**: a belt now belongs to one consultant, called **the belt's consultant**. I added "_Avoid_: 'holding' a belt", because consultants hold *colours*, not belts.
+- **Submission**: only the belt's consultant can submit, and only once every objective is validated. The belt is handed over for *a* sensei's decision, not a named one, and any sensei can decide.
 
-As agreed, there's no ADR. The CLI details are for the spec, not the glossary:
-- **Command and output:** `submit <belt> <consultant>` prints `B-3: NEED_VALIDATION` on success.
-- **Check order:** belt exists → caller is the belt's consultant → status is `IN_PROGRESS` → has objectives → all objectives validated.
-- **Refusal messages:** a missing-objectives refusal is one line, `refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop`. A wrong-status refusal reads `refused: cannot submit a belt in NEED_VALIDATION`.
+**No ADR.** None of these decisions needs one:
+- **Check order** (ownership, then status, then no objective, then remaining objectives): this applies to one code site, so a code comment there is enough.
+- **Refusal format and `B-3: NEED_VALIDATION` output**: these are one command's contract under ADR-0003, so they belong in the spec.
+- **Keeping `NEED_VALIDATION`, the shared sensei queue, and storing no `submittedAt`**: these simply leave the code as it is, so there's nothing to guard against.
 
-Nothing is left open. The rule that a sensei can't decide on a belt they mentored, or on their own, stays for a later story, as the glossary already says.
+**Decisions for the spec:**
+- **Command**: `submit <belt> <consultant>`, added to USAGE.
+- **Success output**: prints `B-3: NEED_VALIDATION`.
+- **Rule 1 refusal**: `refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop`, with multiple objectives separated by `; `. It exits with code 2 and leaves the state unchanged.
+- **Rule 4**: stays as a guard in the domain. It can't be reached through the CLI today because rule 3 refuses those belts first.
+- **Business rule wording**: rule 2 should read "Only the belt's consultant submits it" when it's carried into the spec.
 
-If that matches what you have in mind, the next step is **`/to-spec`**, which writes the spec for the technical backlog from this session. Should I commit the `CONTEXT.md` change on the integration branch first?
+**Next step:** run `/to-spec` to turn this into the spec on the technical backlog (`.scratch/<feature-slug>/SPEC.md`). If you want the glossary change on the branch first, I can commit it.
 
 <!-- pdsf-turn: learner -->
 <!-- pdsf-choices: Not yet, I want to reread CONTEXT.md -->
 ### You
 
-Yes, commit it on the integration branch.
+Yes, commit it, and stop there: I'll run /to-spec myself. In the next skills, go with your recommendations (test seams, ticket breakdown, commits) without asking me.
 
 <!-- pdsf-turn: agent -->
 ### Agent
 
-⏺ Bash(git add CONTEXT.md && git commit -q -F - <<'EOF')
+⏺ Bash(git add CONTEXT.md && git commit -q -m "BELT-US-1 grilling: belt's consultant, submission…)
 
-I committed the `CONTEXT.md` change on `integration/BELT-US-1-submit-my-belt-for-sensei-validation` as `7b0a930`. The working tree is clean, and the branch is only local: `/to-tickets` pushes it later.
+The `CONTEXT.md` change is committed as `e7ddf3d` on `integration/BELT-US-1-submit-belt-for-validation`, and the working tree is clean. I'm stopping here; `/to-spec` is yours to run.
 
-Next step: `/to-spec`, which writes the spec for the technical backlog from this session.
+In the next skills I'll go with my own choices on test seams, ticket breakdown and commits without asking you. That stops at the git flow rules: sub-tickets can auto-merge into the integration branch after a green local check, but I won't merge anything into `develop` or `main` — that stays your call.

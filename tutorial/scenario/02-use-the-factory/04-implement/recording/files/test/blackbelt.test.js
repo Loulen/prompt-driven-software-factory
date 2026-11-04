@@ -118,90 +118,79 @@ test('only a sensei decides, and only on a belt that awaits validation', () => {
   assert.throws(() => bb.decideBelt('B-2', 'margaret', 'VALIDATED'), /cannot go from IN_PROGRESS/);
 });
 
+test('the belt\'s consultant submits their belt once every objective is validated', () => {
+  const bb = blackbelt([
+    belt({ status: 'IN_PROGRESS', objectives: [{ id: '1', label: 'Kata', status: 'VALIDATED' }] }),
+  ]);
+  assert.equal(bb.submitBelt('B-1', 'ada').status, 'NEED_VALIDATION');
+  assert.equal(bb.getBelt('B-1').status, 'NEED_VALIDATION');
+});
+
+test('a belt with objectives still to validate is refused, listing them, and stays in progress', () => {
+  const bb = blackbelt([
+    belt({
+      status: 'IN_PROGRESS',
+      objectives: [
+        { id: '1', label: 'Kata', status: 'VALIDATED' },
+        { id: '2', label: 'Run a refactoring workshop', status: 'TODO' },
+        { id: '3', label: 'Mentor, then pair', status: 'TODO' },
+      ],
+    }),
+  ]);
+  assert.throws(
+    () => bb.submitBelt('B-1', 'ada'),
+    { name: 'DomainError', message: 'belt B-1 has objectives still to validate: 2. Run a refactoring workshop; 3. Mentor, then pair' },
+  );
+  assert.equal(bb.getBelt('B-1').status, 'IN_PROGRESS');
+});
+
+test('only the belt\'s consultant submits it, and the refusal does not reveal its objectives', () => {
+  const bb = blackbelt([
+    belt({ status: 'IN_PROGRESS', objectives: [{ id: '1', label: 'Secret kata', status: 'TODO' }] }),
+  ]);
+  assert.throws(() => bb.submitBelt('B-1', 'grace'), (error) => {
+    assert.ok(error instanceof DomainError);
+    assert.match(error.message, /only the belt's consultant \(ada\) can submit it/);
+    assert.doesNotMatch(error.message, /Secret kata/);
+    return true;
+  });
+  assert.throws(() => bb.submitBelt('B-1', 'nobody'), /only the belt's consultant/);
+  assert.throws(() => bb.submitBelt('B-404', 'ada'), /no belt B-404/);
+  assert.equal(bb.getBelt('B-1').status, 'IN_PROGRESS');
+});
+
+test('only a belt in progress can be submitted, whatever its objectives', () => {
+  for (const status of ['REQUESTED', 'MENTOR_ASSIGNED', 'NEED_VALIDATION', 'VALIDATED', 'REFUSED']) {
+    const bb = blackbelt([
+      belt({ status, objectives: [{ id: '1', label: 'Kata', status: 'TODO' }] }),
+    ]);
+    assert.throws(
+      () => bb.submitBelt('B-1', 'ada'),
+      { name: 'DomainError', message: `belt B-1 is ${status}: only a belt in progress can be submitted` },
+    );
+    assert.equal(bb.getBelt('B-1').status, status);
+  }
+});
+
+test('a belt with no objective cannot be submitted', () => {
+  const bb = blackbelt([belt({ status: 'IN_PROGRESS', objectives: [] })]);
+  assert.throws(() => bb.submitBelt('B-1', 'ada'), { name: 'DomainError', message: 'belt B-1 has no objective' });
+  assert.equal(bb.getBelt('B-1').status, 'IN_PROGRESS');
+});
+
+test('a submitted belt\'s objectives are frozen', () => {
+  const bb = blackbelt([
+    belt({ status: 'IN_PROGRESS', objectives: [{ id: '1', label: 'Kata', status: 'VALIDATED' }] }),
+  ]);
+  bb.submitBelt('B-1', 'ada');
+  assert.throws(() => bb.addObjective('B-1', 'grace', 'One more'), /cannot add an objective to a belt in NEED_VALIDATION/);
+  assert.throws(() => bb.validateObjective('B-1', '1', 'grace'), /cannot validate an objective of a belt in NEED_VALIDATION/);
+});
+
 test('the domain works on its own copy of the state', () => {
   const state = { disciplines, people, belts: [] };
   const bb = new Blackbelt(state);
   bb.requestBelt('ada', 'craft');
   assert.equal(state.belts.length, 0);
   assert.equal(bb.toJSON().belts.length, 1);
-});
-
-function inProgress(objectives, overrides = {}) {
-  return belt({ status: 'IN_PROGRESS', objectives, ...overrides });
-}
-
-const done = (id, label) => ({ id, label, status: 'VALIDATED' });
-const todo = (id, label) => ({ id, label, status: 'TODO' });
-
-test('the belt consultant submits an in-progress belt whose objectives are all validated', () => {
-  const bb = blackbelt([inProgress([done('1', 'Kata'), done('2', 'Workshop')])]);
-  const submitted = bb.submitBelt('B-1', 'ada');
-  assert.equal(submitted.id, 'B-1');
-  assert.equal(submitted.status, 'NEED_VALIDATION');
-  assert.equal(bb.getBelt('B-1').status, 'NEED_VALIDATION');
-});
-
-test('only the belt consultant submits it', () => {
-  const bb = blackbelt([inProgress([done('1', 'Kata')])]);
-  assert.throws(() => bb.submitBelt('B-1', 'grace'), {
-    name: 'DomainError',
-    message: "only the belt's consultant (ada) can submit it",
-  });
-});
-
-test('someone else learns nothing about the objectives: rule 2 is checked first', () => {
-  const bb = blackbelt([inProgress([done('1', 'Kata'), todo('2', 'Secret workshop')])]);
-  assert.throws(() => bb.submitBelt('B-1', 'grace'), { message: "only the belt's consultant (ada) can submit it" });
-});
-
-test('only an in-progress belt is submitted, and the refusal names its status', () => {
-  for (const status of ['REQUESTED', 'MENTOR_ASSIGNED', 'NEED_VALIDATION', 'VALIDATED', 'REFUSED']) {
-    const bb = blackbelt([belt({ status, objectives: [done('1', 'Kata')] })]);
-    assert.throws(() => bb.submitBelt('B-1', 'ada'), { name: 'DomainError', message: `cannot submit a belt in ${status}` });
-  }
-});
-
-test('a belt without any objective is not submitted', () => {
-  const bb = blackbelt([inProgress([])]);
-  assert.throws(() => bb.submitBelt('B-1', 'ada'), { name: 'DomainError', message: 'belt B-1 has no objective' });
-});
-
-test('the refusal lists the objective still to validate by id and label', () => {
-  const bb = blackbelt([inProgress([done('1', 'Kata'), todo('2', 'Run a refactoring workshop')])]);
-  assert.throws(() => bb.submitBelt('B-1', 'ada'), {
-    name: 'DomainError',
-    message: 'belt B-1 has objectives still to validate: 2. Run a refactoring workshop',
-  });
-});
-
-test('several objectives still to validate are listed in objective order', () => {
-  const bb = blackbelt([inProgress([todo('1', 'Kata'), done('2', 'Talk'), todo('3', 'Workshop')])]);
-  assert.throws(() => bb.submitBelt('B-1', 'ada'), {
-    message: 'belt B-1 has objectives still to validate: 1. Kata; 3. Workshop',
-  });
-});
-
-test('an unknown belt is not submitted', () => {
-  assert.throws(() => blackbelt().submitBelt('B-9', 'ada'), { name: 'DomainError', message: 'no belt B-9' });
-});
-
-test('a refused submission leaves the state unchanged', () => {
-  const bb = blackbelt([
-    inProgress([done('1', 'Kata'), todo('2', 'Workshop')]),
-    inProgress([], { id: 'B-2' }),
-    belt({ id: 'B-3', status: 'MENTOR_ASSIGNED' }),
-  ]);
-  const before = bb.toJSON();
-  for (const [beltId, consultantId] of [['B-9', 'ada'], ['B-1', 'grace'], ['B-1', 'ada'], ['B-2', 'ada'], ['B-3', 'ada']]) {
-    assert.throws(() => bb.submitBelt(beltId, consultantId), DomainError);
-  }
-  assert.deepEqual(bb.toJSON(), before);
-});
-
-test('a submitted belt has frozen objectives, and a sensei decides on it', () => {
-  const bb = blackbelt([inProgress([done('1', 'Kata')])]);
-  bb.submitBelt('B-1', 'ada');
-  assert.throws(() => bb.addObjective('B-1', 'grace', 'One more'), /cannot add an objective to a belt in NEED_VALIDATION/);
-  assert.throws(() => bb.validateObjective('B-1', '1', 'grace'), /cannot validate an objective of a belt in NEED_VALIDATION/);
-  assert.equal(bb.decideBelt('B-1', 'margaret', 'VALIDATED').status, 'VALIDATED');
 });

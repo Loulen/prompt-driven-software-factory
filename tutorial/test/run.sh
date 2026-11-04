@@ -101,7 +101,7 @@ assert_out "$TMP/journey.log" "🎉 Your factory is built. 8 checks green, 3 com
 assert_out "$TMP/journey.log" "Tomorrow, on your project"
 assert_out "$TMP/journey.log" "[ q quit  ·  r restart ]"
 assert_out "$TMP/journey.log" "curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/install.sh | sh"
-assert "the workspace is a git repo, on develop" test "$(git -C "$WS" symbolic-ref --short HEAD)" = develop
+assert "the workspace is a git repo, on the story's integration branch (the bonus)" test "$(git -C "$WS" symbolic-ref --short HEAD)" = integration/BELT-US-1-submit-belt-for-validation
 assert "main holds the fixture's initial commit only" test "$(git -C "$WS" log --format=%s main)" = "Blackbelt (lite): initial commit"
 assert "develop: install, scaffold, context — committed for real" test "$(git -C "$WS" log --format=%s main..develop | tr '\n' '~')" = "Bootstrap project context: glossary + foundational ADRs~Wire the agentic factory: ports, method constants, scaffold~Install PDSF 0.6.0~"
 assert "the skills and AGENTS.md are in the workspace" sh -c "[ -f '$WS/.agents/skills/build-factory/SKILL.md' ] && grep -q 'PDSF:BEGIN' '$WS/AGENTS.md'"
@@ -111,8 +111,79 @@ assert "CONTEXT.md and 3 ADRs" sh -c "grep -q Belt '$WS/CONTEXT.md' && [ \"\$(ls
 assert "the working tree is clean" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
 assert "the fixture's tests still pass in the workspace" sh -c "cd '$WS' && node --test </dev/null"
 assert "typing claude never launched the real claude" test ! -e "$TMP/real-claude.calls"
-assert "the progress is saved as done" grep -q '"step": 9' "$WS/.git/pdsf-tutorial.json"
+assert "the progress is saved as done" grep -q '"step": 15' "$WS/.git/pdsf-tutorial.json"
 assert "the tutorial's own files stay out of the workspace tree" sh -c "! git -C '$WS' ls-files | grep -qi tutorial"
+
+t "the bonus: Belt US-1 from /grill-with-docs to /implement, 2 answers, then node --test for real"
+for _s in story grill spec tickets implement tests; do
+  assert_out "$TMP/journey.log" "bonus/$_s ("
+done
+for _s in grill spec tickets implement tests; do
+  assert "the bonus $_s check passes" grep -q "check $_s: .* all pass" "$TMP/journey.log"
+done
+assert_out "$TMP/journey.log" "Bonus · 3 min: take a user story all the way to green tests."
+assert_out "$TMP/journey.log" "/grill-with-docs → /to-spec → /to-tickets → /implement → node --test"
+assert_out "$TMP/journey.log" "Belt US-1 [user] Submit my belt for sensei validation"
+assert_out "$TMP/journey.log" "Belt US-1: a consultant submits their belt once its objectives are done."
+assert_out "$TMP/journey.log" "> /grill-with-docs BELT-US-1"
+assert "the bonus asks 2 answers in total (at most 3)" test "$(sed -n '/### step 10\//,$p' "$TMP/journey.log" | grep -c '^  answered: ')" -eq 2
+assert_out "$TMP/journey.log" "> /to-spec"
+assert_out "$TMP/journey.log" "> /to-tickets"
+assert_out "$TMP/journey.log" "> /implement"
+assert_out "$TMP/journey.log" "+ .scratch/belt-submission/SPEC.md"
+assert_out "$TMP/journey.log" "⏺ merge "
+assert_out "$TMP/journey.log" "$ node --test"
+assert_out "$TMP/journey.log" "ℹ tests 40  pass 40  fail 0"
+assert_out "$TMP/journey.log" "40/40 green, 10 new. A user story went from the backlog to code."
+_ib=integration/BELT-US-1-submit-belt-for-validation
+assert "develop keeps the factory only" test "$(git -C "$WS" rev-list --count main..develop)" -eq 3
+assert "the integration branch: grilling, spec, tickets, then the feature merged --no-ff" test "$(git -C "$WS" log --first-parent --format=%s develop.."$_ib" | tr '\n' '~')" = "Merge feature/01-submit-belt into $_ib~BELT-US-1 tickets: 01 submit a belt~BELT-US-1 spec: submit a belt for a sensei's decision~BELT-US-1 grilling: belt's consultant, submission to any sensei~"
+assert "the feature branch holds the code commit" test "$(git -C "$WS" log -1 --format=%s feature/01-submit-belt)" = "01 submit a belt for a sensei's decision (BELT-US-1)"
+assert "the spec and the ticket are on the local technical backlog, the ticket done" sh -c "[ -f '$WS/.scratch/belt-submission/SPEC.md' ] && grep -q '^\*\*Status:\*\* done' '$WS/.scratch/belt-submission/tickets/01-submit-belt.md'"
+assert "the business story links back to its ticket" grep -q '^## Comments' "$WS/business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
+assert "Belt US-1 is implemented: submit refuses while objectives remain, listing them" sh -c "cd '$WS' && node src/cli.js submit B-2 ada 2>&1 | grep -q 'still to validate: 2. Run a refactoring workshop'"
+assert "node --test passes in the workspace, with the new Belt US-1 tests" sh -c "cd '$WS' && node --test </dev/null >'$TMP/ws-tests.log' 2>&1 && grep -q '^# pass 40' '$TMP/ws-tests.log' && grep -q '^ok .* - a belt with objectives still to validate is refused, listing them' '$TMP/ws-tests.log'"
+
+t "skipping the bonus (s on its card) goes straight to the end card"
+{
+  printf '{enter}\n'                                                   # intro
+  for _k in install ide claude help; do printf '{tab}\n{enter}\n{enter}\n'; done
+  printf '{tab}\n{enter}\n{enter}\n{enter}\n{enter}\n'                   # scaffold: 2 questions
+  printf '{enter}\n'                                                   # why twice
+  printf '{tab}\n{enter}\n{enter}\n'                                   # clear
+  printf '{tab}\n{enter}\n{enter}\n{enter}\n'                           # context: 1 question
+  printf '{tab}\n{enter}\n{enter}\n'                                   # verify
+  printf '{s}\n{q}\n'                                                  # bonus card: skip; end card: quit
+} >"$TMP/skip.txt"
+tuto ws-skip "$TMP/skip.log" PDSF_TUTO_SCRIPT="$TMP/skip.txt"
+assert "the tutorial ends with status 0" test $? -eq 0
+assert_out "$TMP/skip.log" "Enter ↵ play the bonus  ·  s skip to the end"
+assert_no_out "$TMP/skip.log" "bonus/story ("
+assert_out "$TMP/skip.log" "Tomorrow, on your project"
+assert "no bonus work in the workspace: still on develop" test "$(git -C "$TMP/ws-skip" symbolic-ref --short HEAD)" = develop
+assert "the progress is saved as done" grep -q '"step": 15' "$TMP/ws-skip/.git/pdsf-tutorial.json"
+
+t "in the bonus, node --test typed in the harness asks to /exit first; the bonus can be resumed"
+{
+  sed '$d' "$TMP/skip.txt" | sed '$d'                                   # the factory, up to the bonus card
+  printf '{enter}\n{enter}\n'                                           # bonus card: play; the story
+  printf '{tab}\n{enter}\n{down}\n{enter}\n{enter}\n{enter}\n'             # grill: an off-path 1st answer
+  printf '{ctrl-c}\n'
+} >"$TMP/bonus1.txt"
+tuto ws-bonus "$TMP/bonus1.log" PDSF_TUTO_SCRIPT="$TMP/bonus1.txt"
+assert "Ctrl-C in the bonus quits with status 130" test $? -eq 130
+assert_out "$TMP/bonus1.log" "answered: 2. All ok, but submit names one sensei (Q3)"
+assert_out "$TMP/bonus1.log" "progress saved at step 3/6 (Bonus · first feature)"
+{
+  for _k in spec tickets implement; do printf '{tab}\n{enter}\n{enter}\n'; done
+  printf 'node --test\n{auto}\n'
+} >"$TMP/bonus2.txt"
+tuto ws-bonus "$TMP/bonus2.log" PDSF_TUTO_SCRIPT="$TMP/bonus2.txt"
+assert "the resumed bonus ends with status 0" test $? -eq 0
+assert_out "$TMP/bonus2.log" "↻ Resumed at step 3/6: your workspace kept its files and commits."
+assert_out "$TMP/bonus2.log" "This one runs in the shell: type /exit first."
+assert_out "$TMP/bonus2.log" "ℹ tests 40  pass 40  fail 0"
+assert "the resumed bonus is done: the feature is merged" sh -c "git -C '$TMP/ws-bonus' log --format=%s | grep -q 'Merge feature/01-submit-belt'"
 
 t "every screen fits the terminal, the coach never shows more than 2 lines, progress on every step"
 FR=$(frames_ok "$TMP/journey.log.frames" 80 24)
@@ -127,6 +198,8 @@ assert "the harness screens are labelled SIMULATED" grep -q '✻ Claude Code   S
 assert "the shell and harness tabs are shown" grep -q 'shell   claude · simulated' "$TMP/journey.log.frames"
 assert "the intro and end cards are shown" sh -c "grep -q 'P D S F  ·  build your software factory' '$TMP/journey.log.frames' && grep -q 'Tomorrow, on your project' '$TMP/journey.log.frames'"
 assert "progress 1/9 … 9/9 then done" sh -c "grep -q '◉○○○○○○○○ 1/9' '$TMP/journey.log.frames' && grep -q '●●●●●●●●◉ 9/9' '$TMP/journey.log.frames' && grep -q '●●●●●●●●● done' '$TMP/journey.log.frames'"
+assert "the bonus screens were checked too: bonus 1/6 … 6/6" sh -c "grep -q 'bonus ◉○○○○○ 1/6' '$TMP/journey.log.frames' && grep -q 'bonus ●●●●●◉ 6/6' '$TMP/journey.log.frames'"
+assert "the bonus card is drawn" grep -q 'bonus · ~3 min' "$TMP/journey.log.frames"
 
 t "off-script input gets a one-line hint, never a dead end; ? hints, ?? does the step; Ctrl-C saves"
 cat >"$TMP/offscript.txt" <<'EOF'
@@ -316,7 +389,7 @@ assert "the install action is idempotent (a resumed install)" test $? -eq 0
 for _s in 02-scaffold 03-context; do
   assert_not "the $_s check fails before the agent ran" tuto_run_check "$SCEN/01-build-the-factory/$_s"
 done
-for _s in 01-grill-with-docs 02-to-spec 03-to-tickets 04-implement; do
+for _s in 01-grill-with-docs 02-to-spec 03-to-tickets 04-implement 05-tests; do
   assert_not "the bonus $_s check fails before the agent ran" tuto_run_check "$SCEN/02-use-the-factory/$_s"
 done
 
@@ -335,7 +408,9 @@ for _s in $(tuto_recorded_steps); do
   assert "$_id: no machine-specific path leaked into the recording" sh -c "! grep -rqE '/tmp/|/home/|/Users/' '$_s/recording'"
 done
 assert "chapter one's recordings are kept" test "$(tuto_recorded_steps | grep -c 01-build-the-factory)" -eq 3
-assert "the bonus recordings are kept for the bonus chapter" test "$(tuto_recorded_steps | grep -c 02-use-the-factory)" -eq 4
+assert "the bonus chapter has its 4 recordings" test "$(tuto_recorded_steps | grep -c 02-use-the-factory)" -eq 4
+assert "the bonus recordings hold 2 learner answers in all (2–3 allowed)" test "$(cat "$SCEN"/02-use-the-factory/*/recording/transcript.md | grep -c '^<!-- pdsf-choices: ')" -eq 2
+assert "the bonus ran in one agent session, each skill typed alone" sh -c 'for s in 02-to-spec 03-to-tickets 04-implement; do [ "$(sed -n "s/^session: //p" "$1/$s/recording/transcript.md")" = continued ] || exit 1; done' _ "$SCEN/02-use-the-factory"
 
 t "the recording library parses turns, choices and the replay keys"
 FAKE="$TMP/fake-step"

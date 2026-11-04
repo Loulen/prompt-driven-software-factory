@@ -16,10 +16,10 @@ export const TUTORIAL_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 export const COACH_MAX = 74;
 export const KINDS = ['do', 'read'];
 export const SCREENS = ['shell', 'harness'];
-export const EFFECTS = ['ide', 'harness', 'shell', 'help', 'clear'];
+export const EFFECTS = ['ide', 'harness', 'shell', 'help', 'clear', 'test'];
 
 // Typical values of the coach placeholders, to lint the lengths as the learner will see them.
-export const SAMPLE_VARS = { ws: '~/pdsf-tutorial/blackbelt', skills: '16', files: '10', adrs: '3', commits: '3', ide: 'VS Code', n: '1', total: '2', pick: '1', name: '/build-factory' };
+export const SAMPLE_VARS = { ws: '~/pdsf-tutorial/blackbelt', skills: '16', files: '10', adrs: '3', commits: '3', ide: 'VS Code', n: '1', total: '2', pick: '1', name: '/build-factory', tests: '43', pass: '43', fail: '0', fresh: '13' };
 
 // The app's own coach texts (scenario.texts): the ones shown in the coach band.
 export const COACH_TEXTS = ['asking', 'almost', 'needHarness', 'needShell', 'leftHarness', 'stuck', 'checkFailed'];
@@ -96,6 +96,12 @@ export function lint(scenario) {
     coachText(`${chapter.id}.card.coach`, chapter.card.coach);
     if (!chapter.card.cta) bad(`${chapter.id}.card.cta`, 'a call to action is required');
   }
+  for (const chapter of scenario.chapters || []) {
+    // A chapter's budget of learner answers (the bonus: 2–3 in total, so it stays short).
+    if (chapter.maxAnswers == null) continue;
+    const asks = (chapter.steps || []).reduce((n, s) => n + (s.play || []).filter((i) => 'ask' in i).length, 0);
+    if (asks > chapter.maxAnswers) bad(`${chapter.id}`, `asks ${asks} answers, more than its maxAnswers (${chapter.maxAnswers})`);
+  }
 
   const ids = new Set();
   for (const step of scenario.steps) {
@@ -120,6 +126,9 @@ export function lint(scenario) {
       if (step.skip) coachText(`${where}.skipped`, step.skipped);
     } else if (step.kind === 'read') {
       if (step.expect || step.play || step.effect) bad(where, 'a read step has no input, play nor effect');
+    }
+    if (step.story && !existsSync(join(scenario.root, 'fixture', 'blackbelt-lite', step.story.file || ''))) {
+      bad(where, `story ${step.story.file} is not a file of the fixture`);
     }
     if (step.effect && !EFFECTS.includes(step.effect)) bad(where, `unknown effect ${step.effect}`);
     const dir = stepDir(scenario, step);

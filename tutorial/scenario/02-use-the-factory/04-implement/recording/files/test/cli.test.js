@@ -61,6 +61,42 @@ test('a domain rule violation is refused with exit code 2', () =>
     assert.match(err, /refused: ada already has an open belt in craft: B-2/);
   }));
 
+test('the belt\'s consultant submits their finished belt; it then awaits a sensei', () =>
+  withState((state) => {
+    const { code, out } = cli(state, 'submit', 'B-3', 'linus');
+    assert.equal(code, 0);
+    assert.equal(out, 'B-3: NEED_VALIDATION\n');
+    assert.match(cli(state, 'show', 'B-3').out, /B-3 {2}linus {2}cloud {2}WHITE {2}NEED_VALIDATION/);
+    assert.match(cli(state, 'decide', 'B-3', 'margaret', 'validated').out, /B-3: VALIDATED/);
+  }));
+
+test('a submission with objectives still to validate is refused and names them', () =>
+  withState((state) => {
+    const { code, err } = cli(state, 'submit', 'B-2', 'ada');
+    assert.equal(code, 2);
+    assert.equal(err, 'refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop\n');
+    assert.match(cli(state, 'show', 'B-2').out, /B-2 {2}ada {2}craft {2}ORANGE {2}IN_PROGRESS/);
+  }));
+
+test('only the belt\'s consultant submits it, and only once', () =>
+  withState((state) => {
+    const notTheirs = cli(state, 'submit', 'B-3', 'ada');
+    assert.equal(notTheirs.code, 2);
+    assert.match(notTheirs.err, /^refused: only the belt's consultant \(linus\) can submit it/);
+    const nobody = cli(state, 'submit', 'B-3', 'nobody');
+    assert.equal(nobody.code, 2);
+    assert.match(nobody.err, /^refused: only the belt's consultant/);
+    cli(state, 'submit', 'B-3', 'linus');
+    const again = cli(state, 'submit', 'B-3', 'linus');
+    assert.equal(again.code, 2);
+    assert.match(again.err, /^refused: belt B-3 is NEED_VALIDATION: only a belt in progress can be submitted/);
+  }));
+
+test('the usage lists submit', () =>
+  withState((state) => {
+    assert.match(cli(state, 'help').out, /submit <belt> <consultant>/);
+  }));
+
 test('an unknown command prints the usage', () =>
   withState((state) => {
     const { code, err } = cli(state, 'frobnicate');
@@ -73,26 +109,4 @@ test('reset restores the seed', () =>
     cli(state, 'request', 'ada', 'cloud');
     cli(state, 'reset');
     assert.doesNotMatch(cli(state, 'list').out, /B-5/);
-  }));
-
-test('the belt consultant submits a fully validated belt, and the submission is saved', () =>
-  withState((state) => {
-    const { code, out } = cli(state, 'submit', 'B-3', 'linus');
-    assert.equal(code, 0);
-    assert.equal(out, 'B-3: NEED_VALIDATION\n');
-    assert.match(cli(state, 'show', 'B-3').out, /B-3 {2}linus {2}cloud {2}WHITE {2}NEED_VALIDATION/);
-  }));
-
-test('a submission with objectives still to validate is refused, and the belt stays in progress', () =>
-  withState((state) => {
-    const { code, out, err } = cli(state, 'submit', 'B-2', 'ada');
-    assert.equal(code, 2);
-    assert.equal(out, '');
-    assert.equal(err, 'refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop\n');
-    assert.match(cli(state, 'show', 'B-2').out, /B-2 {2}ada {2}craft {2}ORANGE {2}IN_PROGRESS/);
-  }));
-
-test('the usage lists submit', () =>
-  withState((state) => {
-    assert.match(cli(state, 'help').out, /^ {2}submit <belt> <consultant> +\S/m);
   }));

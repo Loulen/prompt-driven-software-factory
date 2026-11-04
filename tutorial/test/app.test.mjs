@@ -10,6 +10,7 @@ import path from 'node:path';
 import * as ui from '../app/ui.mjs';
 import { parseKeys, parseScript } from '../app/keys.mjs';
 import { loadScenario, lint, accepts, sub, transcriptTurns, stepDir, TUTORIAL_ROOT, COACH_MAX } from '../app/scenario.mjs';
+import { parseTap, summarize, fileOf, storyOf } from '../app/readers.mjs';
 
 const W = (lines) => Math.max(...lines.map((l) => ui.width(l)));
 
@@ -107,6 +108,61 @@ test('chapter one: install, code ., claude, /help, /build-factory ×2 around /cl
   }
 });
 
+test('the bonus: a skippable chapter, Belt US-1 from /grill-with-docs to /implement, then node --test', () => {
+  const sc = loadScenario();
+  const bonus = sc.chapters.find((c) => c.id === 'bonus');
+  assert.ok(bonus, 'a bonus chapter');
+  assert.equal(sc.chapters.indexOf(bonus), sc.chapters.length - 1, 'after the factory chapter');
+  assert.ok(bonus.card && bonus.card.cta.includes('s skip'), 'its card offers to skip it');
+  assert.deepEqual(bonus.steps.map((s) => s.expect || `(${s.kind})`),
+    ['(read)', '/grill-with-docs BELT-US-1', '/to-spec', '/to-tickets', '/implement', 'node --test']);
+  const asks = bonus.steps.flatMap((s) => (s.play || []).filter((i) => 'ask' in i));
+  assert.ok(asks.length >= 2 && asks.length <= 3, `2 to 3 answers in total (${asks.length})`);
+  assert.equal(bonus.maxAnswers, 3);
+  for (const s of bonus.steps.filter((x) => x.expect?.startsWith('/'))) {
+    const skill = s.expect.slice(1).split(' ')[0];
+    assert.ok(fs.existsSync(path.join(TUTORIAL_ROOT, '..', 'skills', skill, 'SKILL.md')), `${skill} is a real PDSF skill`);
+  }
+  const last = bonus.steps[bonus.steps.length - 1];
+  assert.equal(last.screen, 'shell');
+  assert.equal(last.effect, 'test');
+  assert.ok(fs.existsSync(path.join(stepDir(sc, last), 'check.sh')));
+});
+
+test('parseTap: top-level results and the summary of node --test', () => {
+  const tap = parseTap([
+    'TAP version 13', '# Subtest: adds', 'ok 1 - adds', '  ---', '  ...',
+    '# Subtest: a \\# hash', 'not ok 2 - a \\# hash', '    ok 1 - nested, not counted',
+    'ok 3 - skipped one # SKIP', '1..3', '# tests 3', '# pass 2', '# fail 1',
+  ].join('\n'));
+  assert.deepEqual(tap.tests.map((t) => [t.title, t.ok]), [['adds', true], ['a # hash', false], ['skipped one', true]]);
+  assert.deepEqual(tap.counts, { tests: 3, pass: 2, fail: 1 });
+  assert.deepEqual(parseTap('ok 1 - a\nok 2 - b\n').counts, { tests: 2, pass: 2, fail: 0 });
+});
+
+test('summarize: tests per file, and the ones new since an earlier commit', () => {
+  const now = { belts: "test('colours', () => {})", cli: 'test("submit prints", () => {}); test(\'usage\', () => {})' };
+  const before = { belts: "test('colours', () => {})", cli: "test('usage', () => {})" };
+  const tap = parseTap('ok 1 - colours\nok 2 - submit prints\nnot ok 3 - usage\n');
+  const sum = summarize(tap, now, before);
+  assert.deepEqual(sum.files, [{ name: 'belts', count: 1, failed: 0 }, { name: 'cli', count: 2, failed: 1 }]);
+  assert.deepEqual(sum.fresh.map((t) => `${t.file} › ${t.title}`), ['cli › submit prints']);
+  assert.deepEqual(sum.failed.map((t) => t.title), ['usage']);
+  assert.equal(fileOf('nowhere', now), '');
+});
+
+test('storyOf: the title and the rules of the fixture\'s business story', () => {
+  const md = fs.readFileSync(path.join(TUTORIAL_ROOT, 'fixture', 'blackbelt-lite', 'business-backlog', 'BELT-US-1-submit-my-belt-for-sensei-validation.md'), 'utf8');
+  const st = storyOf(md, 'BUSINESS RULES');
+  assert.equal(st.title, 'Belt US-1 [user] Submit my belt for sensei validation');
+  assert.equal(st.items.length, 4);
+  assert.match(st.items[0], /^A belt can be submitted only when every objective is validated by the mentor; otherwise/);
+  assert.equal(storyOf(md, 'NOPE').items.length, 0);
+  const intention = storyOf(md, 'INTENTION').items;
+  assert.equal(intention.length, 1, 'a paragraph section is one item');
+  assert.match(intention[0], /^As a consultant, I want to submit my belt .* so that my progress is recognised without waiting for someone to notice it\.$/);
+});
+
 test('every played step replays the recording of its own command, and its questions are recorded answers', () => {
   const sc = loadScenario();
   for (const s of sc.steps.filter((x) => x.play)) {
@@ -133,6 +189,7 @@ test('accepts: the expected input, its accepted variants, nothing else', () => {
 function brokenScenario(mutate) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdsf-lint-'));
   fs.cpSync(path.join(TUTORIAL_ROOT, 'scenario'), path.join(dir, 'scenario'), { recursive: true });
+  fs.symlinkSync(path.join(TUTORIAL_ROOT, 'fixture'), path.join(dir, 'fixture'));
   const file = path.join(dir, 'scenario', 'scenario.json');
   const json = JSON.parse(fs.readFileSync(file, 'utf8'));
   mutate(json);
@@ -141,6 +198,10 @@ function brokenScenario(mutate) {
   fs.rmSync(dir, { recursive: true, force: true });
   return problems.join('\n');
 }
+
+test('an unbroken copy lints clean (the broken copies below differ by one mutation only)', () => {
+  assert.equal(brokenScenario(() => {}), '');
+});
 
 test('the linter refuses: 3 coach lines, a too long line, a bad kind, a do step without input', () => {
   assert.match(brokenScenario((j) => { j.chapters[0].steps[0].coach.push('three'); }), /install\.coach: must be 1 to 2 lines/);
@@ -157,4 +218,7 @@ test('the linter refuses: a missing recording or check, a question that is not a
   assert.match(brokenScenario((j) => { j.chapters[0].steps[4].play.find((i) => i.ask).turn = 2; }), /turn 2 is not a recorded learner answer/);
   assert.match(brokenScenario((j) => { j.chapters[0].steps[4].play.find((i) => i.ask).pick = 9; }), /pick is not one of its choices/);
   assert.match(brokenScenario((j) => { j.chapters[0].steps[0].accept = '^nope$'; }), /expect does not match accept/);
+  assert.match(brokenScenario((j) => { j.chapters[1].maxAnswers = 1; }), /bonus: asks 2 answers, more than its maxAnswers \(1\)/);
+  assert.match(brokenScenario((j) => { j.chapters[1].steps[0].story.file = 'nope.md'; }), /story: story nope\.md is not a file of the fixture/);
+  assert.match(brokenScenario((j) => { j.chapters[1].steps[5].effect = 'magic'; }), /tests: unknown effect magic/);
 });

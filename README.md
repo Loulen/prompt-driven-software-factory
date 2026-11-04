@@ -59,6 +59,12 @@ contexte court), puis `/verify-factory`. Les fichiers et les commits sont réels
 de vrais runs des skills. Ton vrai `claude` n'est jamais lancé. Un **coach** en bas de l'écran
 te dit quoi faire, en deux lignes au plus, et montre ta progression.
 
+En **bonus** (environ 3 minutes, `s` pour passer) : ta première feature. Tu prends la story
+Belt US-1 du backlog métier et tu tapes `/grill-with-docs BELT-US-1` (2 réponses en tout), puis
+`/to-spec`, `/to-tickets` et `/implement`. Le glossaire, la spec, le ticket et le code arrivent
+dans l'espace de travail, commités. Pour finir, `/exit` puis `node --test`, qui tourne pour de vrai
+avec les nouveaux tests de Belt US-1.
+
 Il faut `sh`, `git` et Node 18+. Ctrl-C quitte à tout moment ; relancer la même commande reprend là
 où tu t'étais arrêté. L'espace de travail reste dans `~/pdsf-tutorial/blackbelt`.
 

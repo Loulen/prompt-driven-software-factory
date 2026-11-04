@@ -29,6 +29,7 @@ import path from 'node:path';
 import * as ui from './ui.mjs';
 import { TUTORIAL_ROOT, loadScenario, sub, accepts, stepDir } from './scenario.mjs';
 import { Keys, ScriptEnd } from './keys.mjs';
+import { parseTap, summarize, storyOf } from './readers.mjs';
 
 const ENV = process.env;
 const ROOT = path.resolve(ENV.PDSF_TUTO_ROOT || TUTORIAL_ROOT);
@@ -381,6 +382,13 @@ class App {
       return i < 0 ? [[t, 'orange']] : [[t.slice(0, i), 'orange'], [' SIMULATED ', 'bgOrange dark bold'], [t.slice(i + 9), 'orange']];
     }
     if (l.link) return [[`${l.link[0]}  `, 'dim'], [l.link[1], 'green under']];
+    if (l.bonus) return [[sub(l.bonus, this.vars), 'purple']];
+    if (l.story) return [[l.story[0], 'purple bold'], ['  ', ''], [sub(l.story[1], this.vars), 'dim']];
+    if (l.flow) {
+      // `a → b → c`: slash commands in orange, the rest (node --test) in green, arrows dim.
+      return l.flow.flatMap((x, i) => [...(i ? [[' → ', 'dim']] : []), [x, x.startsWith('/') ? 'orange' : 'green']]);
+    }
+    if (l.keys) return l.keys.flatMap(([k, label], i) => [...(i ? [['        ', '']] : []), [`[ ${k} ]`, 'cyan'], [` ${label}`, 'dim']]);
     return [];
   }
 
@@ -390,7 +398,7 @@ class App {
     const c = chapter.card;
     this.view = 'card';
     this.header = chapter.title;
-    this.card = { color: 'purple', title: [[sub(c.title || chapter.title, this.vars), 'purple']], lines: (c.lines || []).map((l) => this.cardLine(l)) };
+    this.card = { color: 'purple', width: c.width, title: [[sub(c.title || chapter.title, this.vars), 'purple']], lines: (c.lines || []).map((l) => this.cardLine(l)) };
     for (const l of this.card.lines) this.log(`  ${ui.plain(l)}`);
     this.stepIndex = this.sc.steps.indexOf(chapter.steps[0]);
     this.setCoach('normal', c.coach.map((l) => sub(l, this.vars)), c.cta);
@@ -423,6 +431,7 @@ class App {
 
     if (step.kind === 'read') {
       if (step.tip) this.push(step.screen, (w) => this.tipBox(step.tip, w));
+      if (step.story) this.push(step.screen, this.storyBox(step.story));
       this.stepCoach(step);
       await this.waitKey('enter', ['enter']);
       this.saveProgress(i + 1);
@@ -465,6 +474,7 @@ class App {
     if (step.effect === 'clear') { this.clearHarness(); return true; }
     if (step.effect === 'shell') { this.leaveHarness(); return true; }
     if (step.effect === 'ide') return this.openIde(line);
+    if (step.effect === 'test') { await this.runTests(step); return true; }
     const dir = stepDir(this.sc, step);
     if (step.play) { await this.play(step, dir); return true; }
     if (dir && fs.existsSync(path.join(dir, 'action.sh'))) {
@@ -539,9 +549,11 @@ class App {
   // ------------------------------------------------------------------ off-script
 
   async offScript(step, line) {
-    const almost = () => (step.screen === 'harness' && this.screen === 'shell'
-      ? this.setCoach('warn', this.t('needHarness'), 'Type claude')
-      : this.setCoach('warn', this.t('almost', { name: this.nameOf(step) }), sub(step.cta, this.vars)));
+    const almost = () => {
+      if (step.screen === 'harness' && this.screen === 'shell') return this.setCoach('warn', this.t('needHarness'), 'Type claude');
+      if (step.screen === 'shell' && this.screen === 'harness') return this.setCoach('warn', this.t('needShell'), 'Type /exit');
+      return this.setCoach('warn', this.t('almost', { name: this.nameOf(step) }), sub(step.cta, this.vars));
+    };
     if (this.screen === 'shell') {
       this.push('shell', this.promptEcho(line));
       if (!line) return;
@@ -665,11 +677,22 @@ class App {
     this.vars.adrs = String(fs.existsSync(adrDir) ? fs.readdirSync(adrDir).filter((f) => f.endsWith('.md')).length : 0);
     this.vars.commits = git('rev-list', '--count', 'main..HEAD');
     this.branch = git('symbolic-ref', '--short', '-q', 'HEAD');
-    return { before, head, changed, stat, short: git('rev-parse', '--short', 'HEAD'), subject: git('log', '-1', '--format=%s') };
+    // A run that worked on a branch then merged it (`via`): the work is the merged-in commit.
+    const merged = git('rev-parse', '-q', '--verify', 'HEAD^2');
+    const work = merged || 'HEAD';
+    return {
+      before, head, changed, stat,
+      short: git('rev-parse', '--short', work), subject: git('log', '-1', '--format=%s', work),
+      merge: merged ? { short: git('rev-parse', '--short', 'HEAD'), from: git('name-rev', '--name-only', '--exclude=tags/*', merged), into: this.branch } : null,
+    };
   }
 
   itemLines(item, applied) {
-    if ('tool' in item) return [[['⏺ ', 'green'], [item.tool, 'white']]];
+    if ('tool' in item) {
+      const l = [['⏺ ', 'green'], [item.tool, 'white']];
+      if (item.note) l.push([`  ${item.note}`, item.style || 'dim']);
+      return [l];
+    }
     if ('say' in item) {
       const t = item.say;
       if (!t) return [''];
@@ -700,7 +723,10 @@ class App {
     }
     if ('commit' in item) {
       if (applied.head === applied.before) return [];
-      return [[['⏺ ', 'green'], ['commit  ', 'white'], [applied.short, 'yellow'], [` ${applied.subject}`, 'white']]];
+      const out = [[['⏺ ', 'green'], ['commit  ', 'white'], [applied.short, 'yellow'], [` ${applied.subject}`, 'white']]];
+      const m = applied.merge;
+      if (m) out.push([['⏺ ', 'green'], ['merge   ', 'white'], [m.short, 'yellow'], [` ${m.from} → ${m.into}`, 'white']]);
+      return out;
     }
     if ('checks' in item) {
       const out = [];
@@ -714,6 +740,54 @@ class App {
       return out;
     }
     return [];
+  }
+
+  // storyBox(story) -> a scrollback entry: the business story the agent will design, read from the
+  // workspace file: its title, its `section` (the intention), and how many business rules it has.
+  storyBox(story) {
+    let st = { title: '', items: [] };
+    let rules = 0;
+    try {
+      const md = fs.readFileSync(path.join(WS, story.file), 'utf8');
+      st = storyOf(md, story.section || 'INTENTION');
+      rules = storyOf(md, 'BUSINESS RULES').items.length;
+    } catch { /* shown as its label only */ }
+    const label = [[sub(story.label || story.file, this.vars), 'purple']];
+    return (w) => {
+      const rows = [[[st.title || story.file, 'white bold']]];
+      for (const it of st.items) rows.push([[it, 'white']]);
+      if (rules) rows.push([[`${rules} business rules in the file: open it in your IDE`, 'dim']]);
+      return ui.box(rows, { w: Math.min(w, 78), color: 'purple', title: label, padX: 1 });
+    };
+  }
+
+  // runTests(step) — the step's command (`node --test`), FOR REAL in the workspace, shown as a
+  // summary: the tests per file, the ones new since `main` (what the bonus added), the totals.
+  async runTests(step) {
+    this.setCoach('normal', step.coach.map((l) => sub(l, this.vars)), 'running for real…');
+    const r = await run('node', ['--test']);
+    const testDir = path.join(WS, 'test');
+    const files = fs.existsSync(testDir) ? fs.readdirSync(testDir).filter((f) => /\.(test\.)?m?js$/.test(f)).sort() : [];
+    const name = (f) => f.replace(/\.test\.m?js$|\.m?js$/, '');
+    const now = Object.fromEntries(files.map((f) => [name(f), fs.readFileSync(path.join(testDir, f), 'utf8')]));
+    const before = Object.fromEntries(files.map((f) => [name(f), git('show', `main:test/${f}`)]));
+    const sum = summarize(parseTap(r.out), now, before);
+    const line = [];
+    sum.files.forEach((f, i) => {
+      if (i) line.push(['   ', '']);
+      line.push([f.failed ? '✖ ' : '✔ ', f.failed ? 'red' : 'green'], [f.name, 'white'], [` (${f.count})`, 'dim']);
+    });
+    if (line.length) this.push('shell', line);
+    const shown = 3;
+    for (const t of sum.fresh.slice(0, shown)) {
+      this.push('shell', [[t.ok ? '✔ ' : '✖ ', t.ok ? 'green' : 'red'], [`${t.file} › `, 'dim'], [t.title, 'white'], [' (new)', 'orange']]);
+    }
+    if (sum.fresh.length > shown) this.push('shell', [['  ', ''], [`… and ${sum.fresh.length - shown} more new tests`, 'dim']]);
+    for (const t of sum.failed.slice(0, 5)) this.push('shell', [['✖ ', 'red'], [t.title, 'red']]);
+    const c = sum.counts;
+    this.push('shell', [['ℹ ', 'cyan'], [`tests ${c.tests}  pass ${c.pass}  fail ${c.fail}`, c.fail ? 'red' : 'white']]);
+    Object.assign(this.vars, { tests: String(c.tests), pass: String(c.pass), fail: String(c.fail), fresh: String(sum.fresh.length) });
+    this.log(`  node --test: exit ${r.code}, ${c.pass}/${c.tests} pass, ${sum.fresh.length} new`);
   }
 
   tipBox(tip, w) {

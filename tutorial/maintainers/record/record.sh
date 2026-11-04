@@ -58,12 +58,12 @@ step_dir() {
 
 agent_steps() { tuto_recorded_steps; }
 
-# step_command STEP_DIR -> the command the recording starts with (its `command:`, else the first
-# learner turn of the session being recorded).
+# step_command STEP_DIR -> the command the recording starts with: the first learner turn of the
+# session being recorded (as typed, arguments included), else the current recording's `command:`.
 step_command() {
   _cmd=""
-  tuto_has_recording "$1" && _cmd=$(rec_meta "$1" command)
-  [ -n "$_cmd" ] || { [ -n "${STATE:-}" ] && [ -f "$STATE/001-learner.turn" ] && _cmd=$(head -n 1 "$STATE/001-learner.turn"); }
+  [ -n "${STATE:-}" ] && [ -f "$STATE/001-learner.turn" ] && _cmd=$(head -n 1 "$STATE/001-learner.turn")
+  [ -n "$_cmd" ] || { tuto_has_recording "$1" && _cmd=$(rec_meta "$1" command); }
   printf '%s' "$_cmd"
 }
 
@@ -121,6 +121,9 @@ run_agent() {
       CLAUDE_CODE_SESSION_ATTENDED CLAUDE_CODE_MESSAGING_SOCKET CLAUDE_CODE_MESSAGING_TOKEN \
       CLAUDE_CODE_EXECPATH CLAUDE_PID AI_AGENT 2>/dev/null
     cd "$PDSF_TUTO_WORKSPACE" || exit 1
+    # No auto-memory: the recorded agent must not write outside the throwaway workspace, nor carry
+    # what a previous recording taught it (a learner's agent starts without those memories).
+    CLAUDE_CODE_DISABLE_AUTO_MEMORY=1; export CLAUDE_CODE_DISABLE_AUTO_MEMORY
     # shellcheck disable=SC2086
     $CLAUDE_CMD -p "$@" --output-format stream-json --verbose \
       --permission-mode bypassPermissions --strict-mcp-config \

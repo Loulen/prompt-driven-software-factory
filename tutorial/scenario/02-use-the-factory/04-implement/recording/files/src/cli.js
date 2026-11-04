@@ -15,7 +15,7 @@ COMMANDS
   assign-mentor <belt> <mentor>                   Assign a mentor to a requested belt
   add-objective <belt> <mentor> <label...>        The mentor adds an objective (starts the belt)
   validate-objective <belt> <objective> <mentor>  The mentor validates an objective
-  submit <belt> <consultant>                      The belt's consultant submits it for a decision
+  submit <belt> <consultant>                      The consultant submits their belt for a sensei's decision
   decide <belt> <sensei> validated|refused        The sensei's final decision on a belt
   people                                          List people and their roles
   disciplines                                     List disciplines

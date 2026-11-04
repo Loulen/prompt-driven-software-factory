@@ -23,20 +23,19 @@ _Avoid_: grade, level, certification
 
 **Belt**:
 One consultant's attempt at one colour in one discipline, with its own mentor, objectives and
-lifecycle. That consultant is **the belt's consultant**. A refused belt is final: the consultant
-requests a new belt of the same colour. A consultant has at most one **open** belt (neither
-validated nor refused) per discipline.
-_Avoid_: using "belt" for the rank (that's a colour); "holder"/"owner" of a belt (one *holds* a
-colour, not a belt)
+lifecycle. A refused belt is final: the consultant requests a new belt of the same colour. A
+consultant has at most one **open** belt (neither validated nor refused) per discipline. It belongs
+to one consultant: the **belt's consultant**.
+_Avoid_: using "belt" for the rank (that's a colour); "holding" a belt (a consultant holds a colour)
 
 **Belt lifecycle**:
 Requested → mentor assigned → in progress → awaiting validation → validated / refused.
 Forward-only: no withdrawal, no reopening, no step back.
 
 **Submission**:
-The belt's consultant declares their in-progress belt done and hands it over for a sensei's
-decision (→ awaiting validation). Allowed only when the belt has objectives and every one of them
-is validated. It names no particular sensei: any sensei may then decide.
+The belt's consultant declares their in-progress belt done, once every objective is validated, and
+hands it over for a sensei's decision (→ awaiting validation). Not addressed to a particular sensei:
+any sensei may decide.
 
 **Decision**:
 The sensei's final verdict on a belt awaiting validation: validated or refused.
@@ -44,8 +43,7 @@ _Avoid_: approval, review
 
 **Objective**:
 A concrete goal the mentor sets for one belt, validated by the mentor when the consultant achieves
-it in real work. Added and validated only while the belt is in progress; frozen once submitted. A
-belt in progress always has at least one objective.
+it in real work. Added and validated only while the belt is in progress; frozen once submitted.
 _Avoid_: criterion, task, exercise
 
 ### People

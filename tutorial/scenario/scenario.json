@@ -323,6 +323,318 @@
           ]
         }
       ]
+    },
+    {
+      "id": "bonus",
+      "title": "Bonus · first feature",
+      "label": "bonus",
+      "maxAnswers": 3,
+      "card": {
+        "title": "bonus · ~3 min",
+        "width": 76,
+        "lines": [
+          {
+            "bonus": "Your first feature, from the backlog to green tests"
+          },
+          "",
+          {
+            "story": [
+              "BELT-US-1",
+              "Submit my belt for sensei validation"
+            ]
+          },
+          {
+            "flow": [
+              "/grill-with-docs",
+              "/to-spec",
+              "/to-tickets",
+              "/implement",
+              "node --test"
+            ]
+          },
+          "",
+          {
+            "keys": [
+              [
+                "Enter",
+                "play it"
+              ],
+              [
+                "s",
+                "skip to the end"
+              ]
+            ]
+          }
+        ],
+        "coach": [
+          "Bonus · 3 min: take a user story all the way to green tests."
+        ],
+        "cta": "Enter ↵ play the bonus  ·  s skip to the end"
+      },
+      "steps": [
+        {
+          "id": "story",
+          "kind": "read",
+          "screen": "harness",
+          "story": {
+            "file": "business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md",
+            "label": "BELT-US-1 · business-backlog/",
+            "section": "INTENTION"
+          },
+          "coach": [
+            "Belt US-1: a consultant submits their belt once its objectives are done.",
+            "You design it with the agent; it specs, slices and codes it. All for real."
+          ],
+          "cta": "Enter ↵ let's go"
+        },
+        {
+          "id": "grill",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/grill-with-docs BELT-US-1",
+          "dir": "02-use-the-factory/01-grill-with-docs",
+          "coach": [
+            "Design the story with the agent: it grills you, then sharpens the docs.",
+            "It will ask you 2 questions. Pick with ↑ ↓ and Enter."
+          ],
+          "cta": "Type /grill-with-docs BELT-US-1",
+          "hint": "Type /grill-with-docs BELT-US-1 (Tab fills it in), then Enter.",
+          "play": [
+            {
+              "tool": "Bash(cat business-backlog/*US-1*; cat CONTEXT.md; ls docs/adr; …)"
+            },
+            {
+              "tool": "Bash(git checkout -b integration/BELT-US-1-submit-belt-for-vali…)"
+            },
+            {
+              "say": ""
+            },
+            {
+              "say": "Round 1: 7 questions, each with my recommendation. Among them:"
+            },
+            {
+              "say": "  Q2 \"holds the belt\" clashes with the glossary → \"the belt's consultant\"",
+              "style": "dim"
+            },
+            {
+              "say": "  Q3 does a submission name a sensei? → no: any sensei decides",
+              "style": "dim"
+            },
+            {
+              "say": "  Q4 which refusal wins? → ownership, status, then the objectives",
+              "style": "dim"
+            },
+            {
+              "ask": "Answer each one, or just agree with my recommendations.",
+              "choices": [
+                "All ok, as you recommend.",
+                "All ok, but submit names one sensei (Q3)",
+                "All ok, but rule 4 gets its own message (Q1)"
+              ],
+              "pick": 0,
+              "turn": 3
+            },
+            {
+              "tool": "Bash(python3 - <<'EOF')",
+              "note": "CONTEXT.md: Belt, Submission"
+            },
+            {
+              "say": "We agree on everything. No ADR: none of these decisions needs one."
+            },
+            {
+              "ask": "Should I commit the CONTEXT.md change on the integration branch?",
+              "choices": [
+                "Yes, commit it. Next skills: go with your recommendations",
+                "Not yet, I want to reread CONTEXT.md"
+              ],
+              "pick": 0,
+              "turn": 5
+            },
+            {
+              "writes": [
+                {
+                  "path": "CONTEXT.md",
+                  "note": "the belt's consultant · any sensei decides"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Designed: the glossary is sharpened, on a new integration/ branch.",
+            "Open CONTEXT.md in your IDE: that is what the agent will build on."
+          ]
+        },
+        {
+          "id": "spec",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/to-spec",
+          "dir": "02-use-the-factory/02-to-spec",
+          "coach": [
+            "Turn the grilling into a spec on the technical backlog. No questions:",
+            "you told the agent to go with its recommendations."
+          ],
+          "cta": "Type /to-spec",
+          "hint": "Type /to-spec, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(cat docs/agents/issue-tracker.md docs/agents/triage-labels.md; …)"
+            },
+            {
+              "say": "Test seams: the two that exist, the domain and the CLI. No new one."
+            },
+            {
+              "writes": [
+                {
+                  "path": ".scratch/belt-submission/SPEC.md",
+                  "note": "ready-for-agent"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Spec written: .scratch/belt-submission/SPEC.md, story moved to In design."
+          ]
+        },
+        {
+          "id": "tickets",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/to-tickets",
+          "dir": "02-use-the-factory/03-to-tickets",
+          "coach": [
+            "Slice the spec into tickets an agent can take, one at a time."
+          ],
+          "cta": "Type /to-tickets",
+          "hint": "Type /to-tickets, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(mkdir -p .scratch/belt-submission/tickets; cat > …)"
+            },
+            {
+              "say": "One ticket: one domain operation plus one CLI command, shipped together."
+            },
+            {
+              "writes": [
+                {
+                  "path": ".scratch/belt-submission/tickets/01-submit-belt.md",
+                  "note": "ready-for-agent"
+                },
+                {
+                  "path": "business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md",
+                  "note": "links back"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "1 ticket, ready for an agent. The business story links back to it."
+          ]
+        },
+        {
+          "id": "implement",
+          "kind": "do",
+          "screen": "harness",
+          "expect": "/implement",
+          "dir": "02-use-the-factory/04-implement",
+          "coach": [
+            "Implement the ticket: tests first, then the code, then a review."
+          ],
+          "cta": "Type /implement",
+          "hint": "Type /implement, then Enter.",
+          "play": [
+            {
+              "tool": "Bash(git checkout -q -b feature/01-submit-belt && …)"
+            },
+            {
+              "tool": "Skill(tdd)"
+            },
+            {
+              "say": "The seams are the two from the spec, which you already approved."
+            },
+            {
+              "tool": "Bash(python3 - <<'EOF')",
+              "note": "a test first"
+            },
+            {
+              "tool": "Edit(src/blackbelt.js)",
+              "note": "then the code"
+            },
+            {
+              "tool": "Bash(node --test test/blackbelt.test.js 2>&1 | grep -E '^# (pass|fail)')",
+              "note": "red → green"
+            },
+            {
+              "say": "Cycles 3 to 6: ownership, status, objectives, then the CLI seam.",
+              "style": "dim"
+            },
+            {
+              "say": "40/40 tests pass. Review and Feature Path, each in its own subagent:"
+            },
+            {
+              "tool": "Agent(Independent code review of diff)",
+              "note": "nothing blocking"
+            },
+            {
+              "tool": "Agent(Run Feature Path agentic test)",
+              "note": "all 6 steps pass",
+              "style": "green"
+            },
+            {
+              "writes": [
+                {
+                  "path": "src/blackbelt.js"
+                },
+                {
+                  "path": "src/cli.js"
+                },
+                {
+                  "path": "test/blackbelt.test.js"
+                },
+                {
+                  "path": "test/cli.test.js"
+                }
+              ],
+              "stat": true
+            },
+            {
+              "commit": true
+            }
+          ],
+          "done": [
+            "Code written. Do not take the agent's word for it: run the tests yourself."
+          ]
+        },
+        {
+          "id": "tests",
+          "kind": "do",
+          "screen": "shell",
+          "expect": "node --test",
+          "effect": "test",
+          "dir": "02-use-the-factory/05-tests",
+          "coach": [
+            "Leave the agent with /exit, then run the tests yourself: node --test.",
+            "They run for real, in your workspace."
+          ],
+          "cta": "Type /exit, then node --test",
+          "hint": "In the harness, type /exit. Then in the shell, node --test.",
+          "done": [
+            "{pass}/{tests} green, {fresh} new. A user story went from the backlog to code."
+          ]
+        }
+      ]
     }
   ],
   "end": {

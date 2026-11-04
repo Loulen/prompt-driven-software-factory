@@ -1,102 +1,91 @@
-# Spec: Submit a belt for a sensei's decision
+# Spec: submit a belt for a sensei's decision
 
 Status: ready-for-agent
 
-Business reference: BELT-US-1 — `business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md`
-Integration branch: `integration/BELT-US-1-submit-my-belt-for-sensei-validation`
+Business story: BELT-US-1 — `business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md`
+Integration branch: `integration/BELT-US-1-submit-belt-for-validation`
 
 ## Problem Statement
 
-A consultant works through a belt: a mentor is assigned, sets the belt's objectives and validates
-them one by one. Once every objective is validated, nothing lets the belt's consultant say "I'm
-done". The belt stays in progress forever. A sensei can already decide on a belt awaiting
-validation, but no belt ever reaches that state. The consultant's progress goes unrecognised
-unless someone happens to notice it.
+A consultant's belt goes in progress when the mentor sets its first objective, and the mentor then validates the objectives one by one. Once every objective is validated, nothing lets the consultant say "I'm done". The belt stays in progress forever. The sensei can already decide on a belt awaiting validation, but no belt ever reaches that state, so a consultant's progress is never recognised unless someone happens to notice it.
 
 ## Solution
 
-The belt's consultant can **submit** their in-progress belt from the command line. If the belt has
-objectives and all of them are validated, the belt moves to awaiting validation, and any sensei can
-then take the decision with the existing `decide` command. Otherwise the submission is refused with
-a reason. When objectives remain, the reason lists them by id and label, so the consultant and
-their mentor know exactly what is left. A refused submission never changes the belt.
+Add a new CLI command, `submit <belt> <consultant>`. The belt's consultant uses it to submit their in-progress belt once every objective is validated. The belt moves to awaiting validation (`NEED_VALIDATION`), where any sensei can decide on it with the existing `decide` command. If the submission breaks a rule, it is **refused** under the CLI contract (ADR-0003): the refusal names the reason, and for missing objectives it lists the objectives still to validate. The belt is left unchanged.
 
 ## User Stories
 
 1. As a consultant, I want to submit my in-progress belt once all its objectives are validated, so that my progress is recognised without waiting for someone to notice it.
-2. As a consultant, I want my submitted belt to move to awaiting validation, so that a sensei can take the decision.
-3. As a consultant, I want a clear confirmation showing the belt and its new status, so that I know the submission worked.
-4. As a consultant, I want my submission refused while objectives remain to validate, so that I don't hand over an unfinished belt.
-5. As a consultant, I want the refusal to list each remaining objective by id and label, so that my mentor and I know exactly what is left.
-6. As a mentor, I want the remaining objectives identified by their id, so that I can validate them directly with `validate-objective`.
-7. As a consultant, I want my belt left unchanged when a submission is refused, so that I can keep working on it.
-8. As a consultant, I want nobody but me to submit my belt, so that the decision to declare it done stays mine.
-9. As a consultant, I want a refusal that tells me I'm not the belt's consultant when I try to submit someone else's belt, so that I understand why it failed.
-10. As a consultant, I don't want to learn anything about another consultant's objectives by trying to submit their belt, so that the belt's details stay with the people concerned.
-11. As a consultant, I want a second submission of the same belt refused, so that a belt awaiting validation can't be handed over twice.
-12. As a consultant, I want a requested belt, or a belt with a mentor assigned but no objective yet, refused on submission, so that only a belt actually being worked on can be submitted.
-13. As a consultant, I want a validated or refused belt refused on submission, so that a closed belt stays final (forward-only lifecycle).
-14. As a consultant, I want the refusal to name the belt's current status when the status is wrong, so that I see where the belt stands.
-15. As a consultant, I want a belt without any objective refused on submission, so that a belt is never validated without tailored objectives.
-16. As a sensei, I want every submitted belt available to every sensei, so that any sensei can take the decision (no particular sensei is named).
-17. As a sensei, I want to decide on a submitted belt with the existing `decide` command, so that the end-to-end lifecycle finally works.
-18. As a mentor, I want a submitted belt's objectives frozen, so that the belt the sensei decides on is the belt the consultant submitted.
-19. As a script author, I want `submit` to follow the CLI contract (exit code 0 on success, a `refused: <reason>` message on stderr with exit code 2 on a refusal, the state unchanged), so that I can script against it like every other command.
-20. As a CLI user, I want `submit` listed in the usage text, so that I can discover it.
-21. As a CLI user, I want the submission saved, so that the next command (`show`, `list`, `decide`) sees the belt awaiting validation.
-22. As a consultant, I want a submission of an unknown belt refused, so that a typo doesn't go unnoticed.
+2. As a consultant, I want a successful submission to move my belt to awaiting validation, so that a sensei can take their decision on it.
+3. As a consultant, I want the CLI to confirm a successful submission with the belt's new status, so that I know it worked.
+4. As a consultant, I want a submission with objectives still to validate to be refused, so that a belt never reaches a sensei unfinished.
+5. As a consultant, I want that refusal to list each remaining objective with its id and label, so that I know exactly what is left and can ask my mentor to validate it.
+6. As a consultant whose belt has several objectives left, I want all of them listed in one refusal, so that I don't have to fix and retry them one at a time.
+7. As a consultant, I want a refused submission to leave my belt exactly as it was, so that retrying later is safe.
+8. As a consultant, I want my submission of someone else's belt to be refused, so that only the belt's consultant can declare it done.
+9. As a consultant, I want a submission of someone else's belt to be refused before its objectives are inspected, so that a refusal never reveals another consultant's remaining objectives.
+10. As a consultant, I want a second submission of a belt already awaiting validation to be refused, so that a submission can't be repeated or reset.
+11. As a consultant, I want submitting a requested belt, or one with a mentor but no objective yet, to be refused, so that only a belt in progress can be submitted.
+12. As a consultant, I want submitting a validated or refused belt to be refused, so that a closed belt stays final.
+13. As a consultant, I want a belt with no objective to never be submittable, so that a belt can't be validated without the mentor setting a goal.
+14. As a sensei, I want submitted belts to reach awaiting validation without being addressed to me personally, so that any sensei can take the decision.
+15. As a sensei, I want to decide on a submitted belt with the existing `decide` command, so that the end-to-end lifecycle works.
+16. As a mentor, I want a belt's objectives to be frozen once it is submitted, so that the sensei decides on the objectives the consultant submitted.
+17. As a script author, I want `submit` to follow the CLI contract (stdout on success; `refused: <reason>` on stderr with exit code 2 on refusal), so that I can script against it like every other command.
+18. As a CLI user, I want `submit` listed in the usage text, so that I can find the command.
+19. As a CLI user, I want submitting an unknown belt or an unknown person to be refused, so that typos don't corrupt the state.
 
 ## Implementation Decisions
 
-- **Domain operation.** A new operation on the `Blackbelt` domain, `submitBelt(beltId, consultantId)`, moves a belt from `IN_PROGRESS` to `NEED_VALIDATION` (a transition the belt workflow already allows) and returns the belt. Every refusal is a `DomainError`, and the domain state is left untouched.
-- **Check order** (the first failing check wins):
-  1. The belt exists. Refused with the existing "no belt <id>" message.
-  2. The caller is the belt's consultant (rule 2). Refused with a reason naming the belt's consultant, in the style of the mentor check, e.g. `only the belt's consultant (linus) can submit it`. This is checked before anything about the belt's contents, so someone else learns nothing about its objectives.
-  3. The belt is in progress (rule 3). Refused with `cannot submit a belt in <STATUS>`, not with the generic transition message.
-  4. The belt has at least one objective (rule 4). Refused with `belt <id> has no objective`. An in-progress belt always has an objective today, but the business rule gets its own explicit guard.
-  5. Every objective is validated (rule 1). Refused with `belt <id> has objectives still to validate: <id>. <label>`, with several remaining objectives separated by `; ` in objective order. Example: `belt B-2 has objectives still to validate: 2. Run a refactoring workshop`.
-- **CLI command.** `submit <belt> <consultant>`. The person acting comes last, as in `validate-objective` and `decide`. On success it prints `<belt>: <STATUS>` (e.g. `B-3: NEED_VALIDATION`), the same way `decide` does. It is a writing command, so the state is saved on success. A refusal follows ADR-0003: `refused: <reason>` on stderr, exit code 2, state unchanged. Add the command to the usage text.
-- **No sensei is named on submission.** The belt carries no "assigned sensei" field, and any sensei may decide (the existing `decide` behaviour).
-- **No schema change.** The belt keeps its existing shape. Only its status changes.
-- **Respect ADR-0001** (Node built-ins only, no new dependency) and **ADR-0002** (one local JSON state file, rewritten whole on each command).
-- **Vocabulary** follows `CONTEXT.md`: *submission*, *the belt's consultant* (never "holder"/"owner"), *awaiting validation*, *decision*.
+- **Domain**: add a `submitBelt(beltId, consultantId)` operation to the Blackbelt domain. It returns the belt. It uses the existing transition `IN_PROGRESS → NEED_VALIDATION`, which is already allowed by the workflow but not yet used. The workflow itself does not change.
+- **Check order** (the first rule broken decides the refusal). Leave a code comment at the site:
+  1. The belt exists.
+  2. **Ownership (rule 2)**: the submitter is the belt's consultant. Otherwise refused. Checked first so that nothing about another consultant's belt leaks.
+  3. **Status (rule 3)**: the belt is `IN_PROGRESS`. Otherwise refused, naming the current status. Checked before the objectives because a submitted belt's objectives are frozen, so listing them would mislead.
+  4. **No objective (rule 4)**: refused if the belt has no objective. This guard is kept explicit in the domain, but **the CLI cannot reach it today**: a belt only becomes `IN_PROGRESS` when its first objective is added, so rule 3 catches belts without objectives first. No CLI message is promised for it.
+  5. **Remaining objectives (rule 1)**: refused if any objective is still `TODO`.
+- **Rule 1 refusal message** (CLI contract): `refused: belt <id> has objectives still to validate: <id>. <label>`. When several objectives remain, they are separated by `; ` (labels are free text and may contain commas). Example: `refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop`.
+- **CLI**: new command `submit <belt> <consultant>`. It is not read-only, so the state is saved on success. Success prints `<belt>: NEED_VALIDATION` on stdout (the same shape as `decide`). Add a usage line: `submit <belt> <consultant>   The consultant submits their belt for a sensei's decision`. Refusals follow ADR-0003: stderr `refused: …`, exit code 2, state unchanged.
+- **The submission does not name a sensei**: the belt waits in a shared queue, and any sensei may decide (the glossary already says so).
+- **The status name stays `NEED_VALIDATION`**, which the glossary calls "awaiting validation". Renaming it would change the CLI contract and is not part of this spec.
+- **No new data is recorded**: no submission date and no submitter field. The status change is enough.
+- **The state schema does not change**: no new dependency (ADR-0001) and the same JSON state file (ADR-0002).
 
 ## Testing Decisions
 
-- **What makes a good test here:** it exercises external behaviour only: what the domain operation returns or refuses, and what the CLI prints, its exit code and the saved state. It never tests private helpers or the internal order of calls.
-- **Seam 1, the domain** (`Blackbelt` over a plain state object; prior art: the existing domain tests for `requestBelt`, `addObjective`, `validateObjective` and `decideBelt`). Cover:
-  - a fully validated in-progress belt goes to `NEED_VALIDATION`;
-  - rule 2: someone other than the belt's consultant is refused;
-  - rule 3: every status other than `IN_PROGRESS` is refused;
-  - rule 4: a hand-built state with an in-progress belt without objectives is refused;
-  - rule 1: the remaining objectives are listed by id and label, including the case of several;
-  - the check order: a non-consultant submitting a belt with remaining objectives gets the rule 2 refusal and sees no objective;
-  - an unknown belt is refused;
-  - a refusal leaves the state unchanged;
-  - after a submission, objectives can no longer be added or validated, and a sensei can decide.
-- **Seam 2, the CLI** (the CLI run as a subprocess against a temporary state file; prior art: the existing CLI tests). Cover:
-  - `submit B-3 linus` prints `B-3: NEED_VALIDATION`, exits with code 0, and a following `show` sees the new status;
-  - `submit B-2 ada` prints `refused: belt B-2 has objectives still to validate: 2. Run a refactoring workshop` on stderr, exits with code 2, and the belt is still `IN_PROGRESS`;
-  - the usage text lists `submit`.
-- **Apex, agentic tests.** The ticket's **Feature Path** drives the real CLI from a shell, starting from the seed (`reset`), through the story's acceptance criteria:
-  1. Linus submits B-3 (Cloud & DevOps WHITE, both objectives validated). The belt awaits validation.
-  2. Ada submits B-2 (Software Craftsmanship ORANGE). Refused: the message names "Run a refactoring workshop" and B-2 stays in progress.
-  3. Ada submits B-3, Linus's belt. Refused (rule 2).
-  4. Linus submits B-3 again. Refused (rule 3).
+- **What makes a good test**: only external behaviour (the domain operation's result or refusal, and the CLI's stdout/stderr/exit code/resulting state), never internals. A good test is one that would still pass after a refactor that keeps the behaviour.
+- **Seam 1: the Blackbelt domain** (prior art: the existing domain tests built on an in-memory state with `belt(...)` overrides). This seam covers every rule:
+  - Success: the belt becomes `NEED_VALIDATION`.
+  - Rule 1: the refusal message lists every remaining objective, by id and label, separated by `; `.
+  - Rule 2: someone else's belt is refused, including when it still has `TODO` objectives (the refusal must not list them).
+  - Rule 3: each non-in-progress status is refused.
+  - Rule 4: a belt with no objective is refused. Only reachable here, through a hand-built state.
+  - A refused submission leaves the belt unchanged.
+  - After a submission, objectives can no longer be added or validated (existing behaviour, asserted for this flow).
+- **Seam 2: the CLI process** (prior art: the existing CLI tests that spawn the CLI against a temporary state file seeded from the seed data). This seam covers the contract on the seed:
+  - `submit B-3 linus` prints `B-3: NEED_VALIDATION` with exit code 0, and `show B-3` then shows `NEED_VALIDATION`.
+  - `submit B-2 ada` exits with code 2, stderr names `2. Run a refactoring workshop`, and B-2 stays `IN_PROGRESS`.
+  - `submit B-3 ada` exits with code 2.
+  - A second `submit B-3 linus` exits with code 2.
+  - The usage text lists `submit`.
+- **No new seam.**
+- **Pyramid apex (agentic tests)**: the ticket's **Feature Path** drives the real CLI on a fresh state (`reset`) through the four acceptance criteria of BELT-US-1:
+  - Linus submits B-3, which then awaits validation.
+  - Ada submits B-2: refused, naming "Run a refactoring workshop", and B-2 stays in progress.
+  - Ada submits B-3 (Linus's belt): refused.
+  - Linus submits B-3 a second time: refused.
 
-  As an extra check, a sensei then decides on B-3 with `decide`, completing the lifecycle. The Feature Path is the ticket's auto-merge gate.
-- **Happy Path candidate.** The full belt journey (request → assign a mentor → add and validate objectives → **submit** → the sensei's decision) is the product's core value and only becomes possible with this feature. It is a strong candidate for one of the at-most-3 Happy Paths, to propose at the `integration → develop` merge request.
+  It finishes with a sensei (margaret) deciding on B-3, to show the lifecycle now completes. That end-to-end journey (request → mentor → objectives → submit → decide) is a candidate for a **Happy Path**, to propose at the integration → develop MR (at most 3 HP; none exists yet).
 
 ## Out of Scope
 
-- Notifying a sensei (email, chat).
-- Withdrawing a submission or reopening a belt (the lifecycle is forward-only).
-- The sensei's decision itself (it already exists).
-- Assigning or choosing a particular sensei.
-- The rule that a sensei never decides a belt they mentored, nor their own (a later story).
-- Any UI beyond the CLI.
+- Notifying the sensei (email, chat).
+- Withdrawing a submission (the lifecycle only moves forward).
+- The sensei's decision itself (it already exists), and the rule that a sensei never decides a belt they mentored or their own (a later story).
+- Renaming the `NEED_VALIDATION` status.
+- Addressing a submission to a particular sensei.
 
 ## Further Notes
 
-- The glossary was sharpened during the grilling (`CONTEXT.md`: Belt, Submission, Objective). No ADR was needed: every decision is either a glossary entry or part of the CLI contract, which the tests pin down.
-- Seed data covers the acceptance criteria as is: B-2 (ada, craft, ORANGE, one remaining objective) and B-3 (linus, cloud, WHITE, all objectives validated).
+- Glossary updated during grilling (`CONTEXT.md`): **the belt's consultant** (a consultant *holds* colours, not belts) and **Submission** (handed over for *a* sensei's decision). Rule 2 of the business story reads "only the belt's consultant submits it".
+- The seed already contains the acceptance data: B-3 (linus, cloud, WHITE, both objectives validated, mentor margaret) and B-2 (ada, craft, ORANGE, objective 2 "Run a refactoring workshop" still `TODO`).

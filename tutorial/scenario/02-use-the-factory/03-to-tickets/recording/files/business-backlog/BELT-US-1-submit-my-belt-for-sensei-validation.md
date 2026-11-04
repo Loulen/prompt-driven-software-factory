@@ -51,6 +51,6 @@ but no belt ever gets there. There is no screen yet: the observable is the comma
 
 ## Comments
 
-- 2026-11-03 — Technical breakdown (integration branch `integration/BELT-US-1-submit-my-belt-for-sensei-validation`):
-  - Spec: `.scratch/belt-submission/SPEC.md`
-  - Ticket 01 — Submit a belt for a sensei's decision: `.scratch/belt-submission/tickets/01-submit-a-belt-for-a-sensei-decision.md` (ready-for-agent)
+- Technical counterpart (integration branch `integration/BELT-US-1-submit-belt-for-validation`):
+  spec `.scratch/belt-submission/SPEC.md`; ticket 01 — `.scratch/belt-submission/tickets/01-submit-belt.md`
+  (ready-for-agent).

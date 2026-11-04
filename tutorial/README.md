@@ -39,6 +39,13 @@ project (ADR-0006).
 | 7 | do | `/clear` | A fresh session. Files and commits stay |
 | 8 | do | `/build-factory` | Context pass: `CONTEXT.md` (glossary) and 3 founding ADRs |
 | 9 | do | `/verify-factory` | Everything green 🎉 |
+| | read | | **Bonus card**: "your first feature", ~3 min. Enter plays it, `s` skips to the end card |
+| B1 | read | | The business story Belt US-1 and its rules, read from the workspace's business backlog |
+| B2 | do | `/grill-with-docs BELT-US-1` | The agent grills you: **2 questions** (↑ ↓ Enter), then the glossary in `CONTEXT.md` is sharpened and committed on a new `integration/BELT-US-1-…` branch |
+| B3 | do | `/to-spec` | The spec in the local technical backlog (`.scratch/belt-submission/SPEC.md`), committed. No question: answer 2 told the agent to go with its recommendations |
+| B4 | do | `/to-tickets` | One `ready-for-agent` ticket; the business story links back to it |
+| B5 | do | `/implement` | Tests first, then the code, an independent review and the Feature Path; the feature branch is merged into the integration branch |
+| B6 | do | `/exit`, then `node --test` | The tests run **for real** in the workspace: 40/40, the 10 new Belt US-1 tests included |
 | | read | | End card: what to type tomorrow on your project, and links |
 
 Every step is either **do** (type the command shown as ghost text: **Tab** fills it in) or **read**
@@ -46,8 +53,8 @@ Every step is either **do** (type the command shown as ghost text: **Tab** fills
 one-line hint in yellow, never a dead end. `?` gives a hint, and a second `?` lets the tutorial do
 the step for you. While the agent works, any key fast-forwards to its next question.
 
-A bonus chapter ("your first feature", from `/grill-with-docs` to `/implement`) is coming (#22).
-Its recordings are already under `scenario/02-use-the-factory/`.
+The bonus takes 2 answers in total (the scenario allows at most 3, `maxAnswers`). Its four agent
+steps replay one real session (`session: continued`): each skill was typed alone, as you do.
 
 ## Entry script (`tutorial.sh`)
 
@@ -94,13 +101,14 @@ tutorial/
 │   ├── tuto.mjs                ← the tutorial app: tutorial shell, simulated harness, coach
 │   ├── ui.mjs                  ← terminal UI: display widths, wrap/fit, palette, components
 │   ├── keys.mjs                ← keyboard and scripted input
+│   ├── readers.mjs             ← reads node --test output (TAP) and a business story
 │   └── scenario.mjs            ← scenario loader and linter (`node app/scenario.mjs lint`)
 ├── scenario/
 │   ├── scenario.json           ← THE scenario: chapters, do/read steps, coach texts (format below)
 │   ├── 01-build-the-factory/   ← one folder per step that touches the workspace:
 │   │   ├── 01-install/         ←   action.sh (runs for real) + check.sh
 │   │   └── 02-scaffold/ …      ←   check.sh + recording/ (transcript.md + files/)
-│   └── 02-use-the-factory/     ← the bonus chapter's recordings (#22)
+│   └── 02-use-the-factory/     ← the bonus chapter: 4 recordings + 05-tests/check.sh
 ├── lib/
 │   ├── scenario.sh             ← shell helpers: frontmatter, step ids, run a check or an action
 │   ├── recording.sh            ← read a recording, replay it onto the workspace (rec_apply)
@@ -153,6 +161,7 @@ that check.
     { "id": "factory", "title": "Build the factory",
       "card": {…},            // optional: a chapter card (Enter plays, `s` skips the chapter)
       "label": "bonus",       // optional: shown before the progress dots
+      "maxAnswers": 3,        // optional: the most questions its plays may ask (the linter checks)
       "steps": [ … ] }
   ],
   "end": { "card": {…}, "coach": ["…"], "cta": "q quit  ·  r restart" },
@@ -176,12 +185,14 @@ A **step**:
 | `hint` | *do*: the one line `?` shows. |
 | `done` | *do*: 1–2 lines once the step is done (green ✓), with numbers. |
 | `dir` | Optional: the step folder under `scenario/` holding its `check.sh` (always run), its `action.sh` (run for real; `@var name=value` output lines feed the coach) and its `recording/`. |
-| `effect` | Optional, built into the app: `harness` (enter the harness), `shell` (leave it), `help`, `clear`, `ide`. |
+| `effect` | Optional, built into the app: `harness` (enter the harness), `shell` (leave it), `help`, `clear`, `ide`, `test` (run `node --test` for real and show its summary: tests per file, the ones new since `main`, the totals; `{tests}`, `{pass}`, `{fresh}` feed the coach). |
 | `help`, `also` | For the `help` effect: the skills to show with a description, then the ones to name. |
 | `play` | Optional: the condensed replay of the step's recording (below). |
 | `tip` | *read*: a box in the scrollback (the "why twice?" context gauge). |
+| `story` | *read*: `{file, label, section}`, a box with a business story's title, one of its sections (the intention) and how many business rules it has, read from the workspace (the file must be in the fixture). |
 
-A **play** is a list of items: `{"tool": "Bash(…)"}`, `{"say": "text"}` (`# ` for a heading; slash
+A **play** is a list of items: `{"tool": "Bash(…)", "note": "…", "style": "green"}` (the note is
+optional), `{"say": "text"}` (`# ` for a heading; slash
 commands are coloured), `{"ask": "question", "choices": [...], "pick": 0, "turn": 3}`,
 `{"writes": [{"path", "note"}], "stat": true, "more": "ADRs"}` (after the recording is applied,
 from real git), `{"commit": true}`, `{"checks": [...], "na": "…"}`. A question's `turn` is the
@@ -189,15 +200,21 @@ learner turn of the transcript it condenses: the linter checks that this turn is
 with alternatives. The tutorial shows a short, faithful excerpt of the real run; the full run is in
 the transcript.
 
+A **card** line is a string, or one of `{"dim"}`, `{"ok"}`, `{"cmd"}`, `{"simulated"}`, `{"link": [label,
+url]}`, `{"bonus"}` (purple), `{"story": [id, title]}`, `{"flow": [command, …]}` (`a → b → c`) and
+`{"keys": [[key, label], …]}`. A chapter card also takes a `title` and a `width`.
+
 The **linter** enforces: valid kinds and screens; every coach text 1–2 lines that fit an
 80-column terminal; every *do* step has an expected input (matching its `accept`), a hint and a
 `done`; every step has a call to action; every `dir` has a `check.sh`; every played step has a
-recording, and every question points at a recorded answer.
+recording, and every question points at a recorded answer; a chapter's questions stay within its
+`maxAnswers`; a `story` is a file of the fixture.
 
 ## Scripted input
 
 `PDSF_TUTO_SCRIPT=auto` plays the recorded path: Tab and Enter on every *do* step, the recorded
-answer to every question, `q` on the end card. `PDSF_TUTO_SCRIPT=<file>` reads the keys from a file,
+answer to every question, Enter on the bonus card (it plays the bonus), `q` on the end card.
+`PDSF_TUTO_SCRIPT=<file>` reads the keys from a file,
 one item per line:
 
 ```
@@ -304,23 +321,29 @@ sh $R turn /tmp/rec-ws --continue /to-spec
   answer (the linter checks it).
 - A step depends on the previous ones: after re-recording step N, re-record (or at least re-test)
   the steps after it.
+- The recorded agent runs without auto-memory (`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`): it must not
+  write outside the throwaway workspace, nor remember an earlier recording.
+- A learner answer that pre-approves the next skills ("go with your recommendations") must also say
+  to stop there, or the agent chains `/to-spec` and `/to-tickets` in the same turn. The bonus was
+  recorded that way, so its later skills ask nothing.
 - `PDSF_RECORD_MODEL` passes `--model`; `PDSF_RECORD_CLAUDE` replaces the agent command (the test
   suite uses a fake one).
 
 ## Tests
 
 ```sh
-sh tutorial/test/run.sh                    # everything below, ~15 s, no token
+sh tutorial/test/run.sh                    # everything below, about a minute, no token
 node --test tutorial/test/app.test.mjs     # the app's unit tests only
 ```
 
 - **The seam**: `tutorial.sh` played end to end with `PDSF_TUTO_SCRIPT` (the recorded path, and an
   off-script session with Ctrl-C then a resume), asserting the transcript, every step check, the
-  workspace and its git history, and **every rendered screen** at 60×20, 80×24 and 120×40: no line
-  wider than the terminal, the coach band always the last 4 rows (so at most 2 lines of text), a
-  progress indicator and a call to action on every screen. A `claude` on `PATH` must never run.
-- **Unit** (`node --test`): widths, wrap and fit, components, key parsing, scripted input, the
-  scenario and its linter (on broken copies).
+  workspace and its git history (the bonus included: its integration branch, the merged feature,
+  a real `node --test` at 40/40; and skipping it with `s`), and **every rendered screen** at 60×20,
+  80×24 and 120×40: no line wider than the terminal, the coach band always the last 4 rows (so at
+  most 2 lines of text), a progress indicator and a call to action on every screen. A `claude` on `PATH` must never run.
+- **Unit** (`node --test`): widths, wrap and fit, components, key parsing, scripted input, the TAP
+  and story readers, the scenario (the bonus chapter included) and its linter (on broken copies).
 - **Recordings**: their format, the recording library, the recorder (with a fake agent).
 - **Contract**: `install.sh` installs no tutorial file; `PDSF_HARNESS` keeps its values.
 - **Fixture**: `cd tutorial/fixture/blackbelt-lite && node --test`.
