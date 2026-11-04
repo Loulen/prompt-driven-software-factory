@@ -44,6 +44,13 @@ const SAFE = new Set(['ls', 'cat', 'head', 'tail', 'wc', 'pwd', 'tree', 'git', '
 const SAFE_GIT = new Set(['log', 'status', 'diff', 'show', 'branch', 'ls-files']);
 const IDES = { code: 'VS Code', 'code-insiders': 'VS Code', cursor: 'Cursor', codium: 'VSCodium', windsurf: 'Windsurf', zed: 'Zed', subl: 'Sublime Text', idea: 'IntelliJ IDEA', webstorm: 'WebStorm' };
 
+// toolLine(call) -> a tool call as Claude Code shows it: ⏺, the tool name in bold, its arguments.
+function toolLine(call) {
+  const m = /^([A-Za-z]+)\(([\s\S]*)\)$/.exec(call);
+  if (!m) return [['⏺ ', 'green'], [call, 'white']];
+  return [['⏺ ', 'green'], [m[1], 'white bold'], [`(${m[2]})`, 'white']];
+}
+
 class Interrupt extends Error {}
 class Fatal extends Error {}
 
@@ -122,6 +129,12 @@ class App {
       for (const l of lines) this.log(ui.plain(l));
     }
     this.render();
+  }
+
+  // gap(screen) -> one blank line between two blocks of a screen, never two in a row.
+  gap(screen) {
+    const s = this.scroll[screen];
+    if (s.length && s[s.length - 1] !== '') this.push(screen, '');
   }
 
   setCoach(state, lines, action, { progress } = {}) {
@@ -443,12 +456,12 @@ class App {
     for (;;) {
       const line = (await this.readLine(step)).trim().replace(/\s+/g, ' ');
       if (step.skip && line === step.skip && this.screen === step.screen) {
-        this.push(this.screen, this.promptEcho(line));
+        this.echo(line);
         skipped = true;
         break;
       }
       if (this.screen === step.screen && accepts(step, line)) {
-        if (step.effect !== 'clear') this.push(this.screen, this.promptEcho(line));
+        if (step.effect !== 'clear') this.echo(line);
         skipped = !(await this.execute(step, line));
         break;
       }
@@ -460,6 +473,12 @@ class App {
     const done = skipped && step.skipped ? step.skipped : step.done;
     this.setCoach('ok', done.map((l) => sub(l, this.vars)), this.t('doneCta'));
     await this.waitKey('enter', ['enter']);
+  }
+
+  // echo(line) -> what the learner typed, in the scrollback; in the harness, a block of its own.
+  echo(line) {
+    if (this.screen === 'harness') this.gap('harness');
+    this.push(this.screen, this.promptEcho(line));
   }
 
   promptEcho(line) {
@@ -582,7 +601,7 @@ class App {
     // harness
     if (!line) return;
     if (line === '/clear') { this.clearHarness(); return; }
-    this.push('harness', this.promptEcho(line));
+    this.echo(line);
     if (line === '/exit' || line === '/quit') {
       this.leaveHarness();
       if (step.screen === 'harness') this.setCoach('warn', this.t('leftHarness'), 'Type claude');
@@ -608,7 +627,16 @@ class App {
     const delay = Math.max(60, Math.min(400, Math.floor(3000 / Math.max(1, total))));
     const working = () => this.setCoach('normal', step.coach.map((l) => sub(l, this.vars)), this.t('workingCta'));
     working();
+    let prev = 'prompt';
     for (const item of items) {
+      // Blocks: a blank line between agent text, tool calls, questions, writes and the commit,
+      // and after a tool call that shows a result (⎿); `say: ""` is an explicit break.
+      const kind = ['ask', 'tool', 'say', 'writes', 'commit', 'checks'].find((k) => k in item) || 'other';
+      if (kind === 'say' && !item.say) { this.gap('harness'); prev = 'break'; continue; }
+      if (kind !== prev || kind === 'ask' || (kind === 'tool' && this.lastNoted)) this.gap('harness');
+      this.lastNoted = kind === 'tool' && !!item.note;
+      this.saying = kind === 'say' && prev === 'say';
+      prev = kind;
       if ('ask' in item) {
         askNo++;
         await this.ask(item, askNo, asks);
@@ -689,43 +717,54 @@ class App {
 
   itemLines(item, applied) {
     if ('tool' in item) {
-      const l = [['⏺ ', 'green'], [item.tool, 'white']];
-      if (item.note) l.push([`  ${item.note}`, item.style || 'dim']);
-      return [l];
+      const out = [toolLine(item.tool)];
+      if (item.note) out.push([['  ⎿  ', 'dim'], [item.note, item.style || 'dim']]);
+      return out;
     }
     if ('say' in item) {
       const t = item.say;
       if (!t) return [''];
-      if (t.startsWith('# ')) return [[[t.slice(2), 'white bold']]];
-      return [ui.rich(t, item.style || 'white')];
+      // Agent text: ⏺ on the first line of a block, like Claude Code; wrapped lines hang under it.
+      const mark = this.saying ? ['  ', ''] : ['⏺ ', 'white'];
+      if (t.startsWith('# ')) return [[mark, [t.slice(2), 'white bold']]];
+      return [[mark, ...ui.rich(t, item.style || 'white')]];
     }
     if ('writes' in item) {
       const listed = item.writes.map((w) => w.path);
       const pool = item.more === 'ADRs' ? applied.changed.filter((p) => /^docs\/adr\/.*\.md$/.test(p)) : applied.changed;
       const more = pool.filter((p) => !listed.includes(p)).length;
-      const out = item.writes.map((w, i) => {
-        const l = [['⏺ ', 'green'], [`Write(${w.path})`, 'white']];
-        if (w.note) l.push([`  ${w.note}`, 'dim']);
-        if (i === item.writes.length - 1 && more > 0) l.push([`  +${more} ${item.more || 'files'}`, 'dim']);
-        return l;
+      const label = item.more || 'files';
+      const moreText = `+${more} more ${more === 1 ? label.replace(/s$/, '') : label}`;
+      const out = [];
+      item.writes.forEach((w, i) => {
+        // With a diffstat under the calls, a note stays on its call's line: one ⎿ block only.
+        if (item.stat) out.push(w.note ? [...toolLine(`Write(${w.path})`), [`  ${w.note}`, 'dim']] : toolLine(`Write(${w.path})`));
+        else {
+          out.push(toolLine(`Write(${w.path})`));
+          if (w.note) out.push([['  ⎿  ', 'dim'], [w.note, 'dim']]);
+        }
+        if (i === item.writes.length - 1 && more > 0 && !item.stat) out.push([['  ⎿  ', 'dim'], [moreText, 'dim']]);
       });
       if (item.stat) {
         const w = Math.max(...listed.map((p) => p.length)) + 2;
+        let first = true;
         for (const p of listed) {
           const s = applied.stat[p];
           if (!s) continue;
-          const l = [['  + ', 'green'], [p.padEnd(w), 'green'], [`+${s.add}`, 'green']];
+          const l = [[first ? '  ⎿  ' : '     ', 'dim'], ['+ ', 'green'], [p.padEnd(w), 'green'], [`+${s.add}`, 'green']];
           if (s.del && s.del !== '0') l.push([` -${s.del}`, 'red']);
           out.push(l);
+          first = false;
         }
+        if (more > 0) out.push([['     ', ''], [moreText, 'dim']]);
       }
       return out;
     }
     if ('commit' in item) {
       if (applied.head === applied.before) return [];
-      const out = [[['⏺ ', 'green'], ['commit  ', 'white'], [applied.short, 'yellow'], [` ${applied.subject}`, 'white']]];
+      const out = [[['⏺ ', 'green'], ['commit', 'white bold'], ['  ', ''], [applied.short, 'yellow'], [` ${applied.subject}`, 'white']]];
       const m = applied.merge;
-      if (m) out.push([['⏺ ', 'green'], ['merge   ', 'white'], [m.short, 'yellow'], [` ${m.from} → ${m.into}`, 'white']]);
+      if (m) out.push([['⏺ ', 'green'], ['merge', 'white bold'], ['   ', ''], [m.short, 'yellow'], [` ${m.from}`, 'cyan'], [' → ', 'dim'], [m.into, 'cyan']]);
       return out;
     }
     if ('checks' in item) {
