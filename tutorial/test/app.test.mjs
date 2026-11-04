@@ -10,7 +10,7 @@ import path from 'node:path';
 import * as ui from '../app/ui.mjs';
 import { parseKeys, parseScript } from '../app/keys.mjs';
 import { loadScenario, lint, accepts, sub, transcriptTurns, stepDir, TUTORIAL_ROOT, COACH_MAX } from '../app/scenario.mjs';
-import { parseTap, summarize, fileOf, storyOf } from '../app/readers.mjs';
+import { parseTap, summarize, fileOf, storyOf, testArgs } from '../app/readers.mjs';
 
 const W = (lines) => Math.max(...lines.map((l) => ui.width(l)));
 
@@ -221,4 +221,26 @@ test('the linter refuses: a missing recording or check, a question that is not a
   assert.match(brokenScenario((j) => { j.chapters[1].maxAnswers = 1; }), /bonus: asks 2 answers, more than its maxAnswers \(1\)/);
   assert.match(brokenScenario((j) => { j.chapters[1].steps[0].story.file = 'nope.md'; }), /story: story nope\.md is not a file of the fixture/);
   assert.match(brokenScenario((j) => { j.chapters[1].steps[5].effect = 'magic'; }), /tests: unknown effect magic/);
+});
+
+test('testArgs: asks for the TAP reporter wherever the flag exists (Node 23+ defaults to spec)', () => {
+  assert.deepEqual(testArgs('18.14.2'), ['--test']);
+  assert.deepEqual(testArgs('v18.15.0'), ['--test', '--test-reporter=tap']);
+  assert.deepEqual(testArgs('19.5.0'), ['--test']);
+  assert.deepEqual(testArgs('19.6.0'), ['--test', '--test-reporter=tap']);
+  assert.deepEqual(testArgs('22.23.3'), ['--test', '--test-reporter=tap']);
+  assert.deepEqual(testArgs('24.22.2'), ['--test', '--test-reporter=tap']);
+});
+
+test('a real node --test run with testArgs() is readable by parseTap, whatever the Node version', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'pdsf-tap-'));
+  writeFileSync(join(dir, 'a.test.mjs'), "import test from 'node:test';\ntest('one', () => {});\ntest('two', () => {});\n");
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT; // a nested runner would report to this one instead of printing
+  const r = spawnSync(process.execPath, testArgs(), { cwd: dir, encoding: 'utf8', env });
+  assert.deepEqual(parseTap(r.stdout).counts, { tests: 2, pass: 2, fail: 0 });
 });

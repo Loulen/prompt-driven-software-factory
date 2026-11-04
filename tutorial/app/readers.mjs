@@ -2,8 +2,17 @@
 // output of a real `node --test`, a business story of the local business backlog. Pure functions:
 // the app feeds them real files and real output; the unit tests feed them samples.
 
+// testArgs(version) -> the arguments for a `node --test` whose output parseTap can read. TAP is
+// the default reporter off a terminal only up to Node 22: Node 23+ defaults to `spec` everywhere,
+// so the TAP reporter is asked for explicitly wherever the flag exists (Node 18.15+, 19.6+).
+export function testArgs(version = process.versions.node) {
+  const [major, minor] = String(version).replace(/^v/, '').split('.').map(Number);
+  const hasFlag = major > 19 || (major === 19 && minor >= 6) || (major === 18 && minor >= 15);
+  return hasFlag ? ['--test', '--test-reporter=tap'] : ['--test'];
+}
+
 // parseTap(text) -> {tests: [{title, ok}], counts: {tests, pass, fail}} from `node --test` TAP
-// output (its default reporter when stdout is not a terminal, Node 18 to 22). Only top-level tests
+// output (run it with testArgs(): TAP is not the default reporter on Node 23+). Only top-level tests
 // count (a describe()'s inner tests are indented); the `# tests / pass / fail` summary wins when
 // present.
 export function parseTap(text) {

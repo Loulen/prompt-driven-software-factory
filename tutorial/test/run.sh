@@ -142,7 +142,7 @@ assert "the feature branch holds the code commit" test "$(git -C "$WS" log -1 --
 assert "the spec and the ticket are on the local technical backlog, the ticket done" sh -c "[ -f '$WS/.scratch/belt-submission/SPEC.md' ] && grep -q '^\*\*Status:\*\* done' '$WS/.scratch/belt-submission/tickets/01-submit-belt.md'"
 assert "the business story links back to its ticket" grep -q '^## Comments' "$WS/business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
 assert "Belt US-1 is implemented: submit refuses while objectives remain, listing them" sh -c "cd '$WS' && node src/cli.js submit B-2 ada 2>&1 | grep -q 'still to validate: 2. Run a refactoring workshop'"
-assert "node --test passes in the workspace, with the new Belt US-1 tests" sh -c "cd '$WS' && node --test </dev/null >'$TMP/ws-tests.log' 2>&1 && grep -q '^# pass 40' '$TMP/ws-tests.log' && grep -q '^ok .* - a belt with objectives still to validate is refused, listing them' '$TMP/ws-tests.log'"
+assert "node --test passes in the workspace, with the new Belt US-1 tests" sh -c "cd '$WS' && node --test --test-reporter=tap </dev/null >'$TMP/ws-tests.log' 2>&1 && grep -q '^# pass 40' '$TMP/ws-tests.log' && grep -q '^ok .* - a belt with objectives still to validate is refused, listing them' '$TMP/ws-tests.log'"
 
 t "skipping the bonus (s on its card) goes straight to the end card"
 {

@@ -29,7 +29,7 @@ import path from 'node:path';
 import * as ui from './ui.mjs';
 import { TUTORIAL_ROOT, loadScenario, sub, accepts, stepDir } from './scenario.mjs';
 import { Keys, ScriptEnd } from './keys.mjs';
-import { parseTap, summarize, storyOf } from './readers.mjs';
+import { parseTap, summarize, storyOf, testArgs } from './readers.mjs';
 
 const ENV = process.env;
 const ROOT = path.resolve(ENV.PDSF_TUTO_ROOT || TUTORIAL_ROOT);
@@ -765,7 +765,7 @@ class App {
   // summary: the tests per file, the ones new since `main` (what the bonus added), the totals.
   async runTests(step) {
     this.setCoach('normal', step.coach.map((l) => sub(l, this.vars)), 'running for real…');
-    const r = await run('node', ['--test']);
+    const r = await run('node', testArgs());
     const testDir = path.join(WS, 'test');
     const files = fs.existsSync(testDir) ? fs.readdirSync(testDir).filter((f) => /\.(test\.)?m?js$/.test(f)).sort() : [];
     const name = (f) => f.replace(/\.test\.m?js$|\.m?js$/, '');
