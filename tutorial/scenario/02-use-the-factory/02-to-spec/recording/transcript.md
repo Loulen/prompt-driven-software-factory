@@ -18,7 +18,7 @@ format: 1
 # Recording — Write the spec (`/to-spec`)
 
 A real run of the PDSF skill on a fresh blackbelt-lite tutorial workspace, recorded with
-`tutorial/record/record.sh`. The files it produced are in `files/`. Format and re-recording
+`tutorial/maintainers/record/record.sh`. The files it produced are in `files/`. Format and re-recording
 procedure: `tutorial/README.md` § Recordings.
 
 <!-- pdsf-turn: learner -->

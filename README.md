@@ -44,33 +44,27 @@ rapporte, propose de corriger ce qui manque, et signale l'étape suivante — **
 
 ## Tutoriel
 
-Pour découvrir PDSF sans risque, une commande crée un espace de travail jetable autour d'un petit
-projet réaliste (**Blackbelt lite**), y installe PDSF pour de vrai, puis te guide pas à pas :
-construire la factory, t'en servir sur une story métier, et savoir où chercher ensuite.
+Pour découvrir PDSF sans risque : **un seul parcours, environ 10 minutes, zéro token**. Une commande
+crée un espace de travail autour d'un petit projet réaliste (**Blackbelt lite**), puis ouvre le
+tutoriel dans ton terminal :
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh | sh
 ```
 
-Mode **replay narré** (A1) : zéro token, rien à installer. Les étapes de l'agent sont rejouées
-depuis l'enregistrement d'un vrai run des skills, et signalées `SIMULATED` ; le reste (install,
-git, tests, vérifications) tourne pour de vrai.
+Tu tapes les vraies commandes : `curl … install.sh | sh` (le vrai installeur), `code .`, `claude`,
+`/help`, `/build-factory` deux fois (avec `/clear` entre les deux : une session par passe, un
+contexte court), puis `/verify-factory`. Les fichiers et les commits sont réels. L'agent, lui, est
+**simulé** : `claude` ouvre une copie de Claude Code dans le tutoriel, qui rejoue des enregistrements
+de vrais runs des skills. Ton vrai `claude` n'est jamais lancé. Un **coach** en bas de l'écran
+te dit quoi faire, en deux lignes au plus, et montre ta progression.
 
-Mode **session simulée** (A2) : zéro token aussi, mais tu fais les vrais gestes. Dans un sous-shell
-de l'espace de travail, tu tapes `claude`, puis les vraies commandes slash, et tu réponds aux
-questions de l'agent. Ce `claude` est une doublure, présente seulement dans ce sous-shell (ton vrai
-`claude` n'est pas touché) : elle rejoue les mêmes enregistrements, propose les réponses en choix
-numérotés (Entrée = la réponse enregistrée) et signale toute réponse hors script. L'état final est
-le même qu'en A1.
+Il faut `sh`, `git` et Node 18+. Ctrl-C quitte à tout moment ; relancer la même commande reprend là
+où tu t'étais arrêté. L'espace de travail reste dans `~/pdsf-tutorial/blackbelt`.
 
-Hors-ligne depuis un checkout, lancé du dossier qui recevra l'espace de travail (hors du checkout) :
-`PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails, modes et variables `PDSF_TUTO_*` :
-**[`tutorial/README.md`](tutorial/README.md)** (en anglais).
-
-En mode **vrai agent** (B), le script copie un skill guide, `pdsf-tutorial`, dans l'espace de travail
-uniquement (jamais par `install.sh`). Tu lances ensuite ton harness et tapes `/pdsf-tutorial` : le
-guide te fait lancer les vrais skills PDSF étape par étape et vérifie chaque résultat. Ce mode
-consomme des tokens.
+Pour une branche en recette : `curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/<branche>/tutorial/tutorial.sh | PDSF_REF=<branche> sh`.
+Hors-ligne depuis un checkout : `PDSF_SRC=<checkout> sh <checkout>/tutorial/tutorial.sh`. Détails,
+format du scénario et ré-enregistrement : **[`tutorial/README.md`](tutorial/README.md)** (en anglais).
 
 ## Pourquoi cette usine ?
 
@@ -249,7 +243,7 @@ prompt-driven-factory/
 │   ├── test-scenarios/             ← Happy Paths (≤ 3)
 │   └── assets/                     ← schémas de la méthode
 ├── .claude-plugin/                 ← canal plugin (marketplace.json, plugin.json)
-├── tutorial/                       ← le tutoriel (script d'entrée, fixture blackbelt-lite, scénario + enregistrements, modes) — jamais installé
+├── tutorial/                       ← le tutoriel (script d'entrée, app terminal, scénario + enregistrements, fixture blackbelt-lite) — jamais installé
 └── skills/
     ├── build-factory/              ← amorçage (backlogs, triage, issue-tracker-{github,gitlab,local}…)
     ├── verify-factory/             ← health check

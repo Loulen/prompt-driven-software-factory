@@ -1,8 +1,9 @@
 # PDSF Tutorial — recording library (POSIX sh, sourced — never executed).
 #
 # Reads and replays the recording of a simulated step: STEP_DIR/recording/{transcript.md,files/}.
-# Shared by the simulated modes (a1 narrated replay, a2 simulated session) and the recorder
-# (tutorial/record/record.sh). The format is documented in tutorial/README.md § Recordings.
+# Shared by the tutorial app (app/tuto.mjs applies a step's recording with rec_apply, then commits)
+# and the maintainers' recorder (maintainers/record/record.sh). The format is documented in
+# tutorial/README.md § Recordings.
 #
 # Needs lib/scenario.sh sourced first (tuto_meta, PDSF_TUTO_WORKSPACE).
 

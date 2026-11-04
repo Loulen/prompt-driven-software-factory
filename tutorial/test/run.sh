@@ -1,17 +1,21 @@
 #!/bin/sh
-# PDSF Tutorial — test suite. Plays the entry script non-interactively (PDSF_TUTO_* + PDSF_SRC = this
-# checkout) in temp dirs, and asserts what the learner sees and the workspace state.
+# PDSF Tutorial — test suite. The seam is the entry script, played non-interactively with a scripted
+# input (PDSF_TUTO_SCRIPT) from this checkout (PDSF_SRC) in temp dirs: it asserts what the learner
+# sees (the transcript, every rendered screen) and the workspace state after each step. Plus the
+# app's unit tests (node --test), the recording library, the recorder and the install.sh contract.
 #
 #   sh tutorial/test/run.sh
 #
-# Needs sh, git, node 18+. Never writes into the checkout.
+# Needs sh, git, node 18+. Never writes into the checkout, never calls a model.
 set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd -P)
 REPO=$(cd "$HERE/../.." && pwd -P)
 TUTO="$REPO/tutorial/tutorial.sh"
+SCEN="$REPO/tutorial/scenario"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/bin" "$TMP/home"
 
 PASS=0; FAIL=0; CURRENT=""
 
@@ -21,412 +25,317 @@ ko() { FAIL=$((FAIL + 1)); printf '  FAIL [%s] %s\n' "$CURRENT" "$1"; }
 assert() { _what=$1; shift; if "$@" >/dev/null 2>&1; then ok; else ko "$_what"; fi; }
 assert_not() { _what=$1; shift; if "$@" >/dev/null 2>&1; then ko "$_what"; else ok; fi; }
 assert_out() { if grep -qF -- "$2" "$1"; then ok; else ko "output lacks: $2"; fi; }
+assert_no_out() { if grep -qF -- "$2" "$1"; then ko "output has: $2"; else ok; fi; }
 
-# tuto DIR LOG [VAR=value…] — play the tutorial from this checkout, no tty, pauses off.
+# A `claude` on PATH that must never run: typing `claude` in the tutorial is the simulated harness.
+cat >"$TMP/bin/claude" <<EOF
+#!/bin/sh
+printf 'REAL CLAUDE CALLED %s\n' "\$*" >> "$TMP/real-claude.calls"
+EOF
+chmod +x "$TMP/bin/claude"
+BASE_PATH="$TMP/bin:$PATH"
+
+# tuto DIR LOG [VAR=value…] — play the tutorial from this checkout, no terminal, the recorded path
+# unless PDSF_TUTO_SCRIPT says otherwise, no IDE launched, screens dumped to LOG.frames.
 tuto() {
   _dir=$1; _log=$2; shift 2
-  ( cd "$TMP" && env PDSF_SRC="$REPO" PDSF_TUTO_DIR="$_dir" PDSF_TUTO_PAUSE=n "$@" sh "$TUTO" ) </dev/null >"$_log" 2>&1
+  rm -f "$_log.frames"
+  ( cd "$TMP" && env HOME="$TMP/home" PATH="$BASE_PATH" PDSF_SRC="$REPO" PDSF_TUTO_DIR="$_dir" \
+      PDSF_TUTO_SCRIPT=auto PDSF_TUTO_NO_IDE=1 PDSF_TUTO_FRAMES="$_log.frames" "$@" sh "$TUTO" ) </dev/null >"$_log" 2>&1
 }
 
-# A copy of the PDSF source, to try the mode menu against modes this checkout doesn't ship.
+# A copy of the PDSF source, to break it on purpose.
 fake_src() {
   _fs="$TMP/src-$1"
   mkdir -p "$_fs"
   ( cd "$REPO" && tar cf - --exclude=.git --exclude=.pdo . ) | ( cd "$_fs" && tar xf - )
-  rm -rf "$_fs/tutorial/modes"/*
   printf '%s' "$_fs"
 }
 
-# ---------------------------------------------------------------------------- setup
+# frames_ok FRAMES COLS ROWS -> checks every rendered screen; prints the first problem.
+frames_ok() { node "$REPO/tutorial/test/check-frames.mjs" "$@" 2>&1; }
 
-t "setup with the .agents + .claude symlinks layout (the default)"
-tuto ws-claude "$TMP/claude.log" PDSF_TUTO_MODE=
-WS="$TMP/ws-claude"
-assert "tutorial exits 0" test $? -eq 0
-assert "workspace is a git repo" test -d "$WS/.git"
-assert "workspace starts with the fixture's initial commit" sh -c "git -C '$WS' log --format=%s main | grep -qx 'Blackbelt (lite): initial commit'"
-assert "the install is committed" sh -c "git -C '$WS' log -1 --format=%s main | grep -q 'Install PDSF'"
-assert "develop exists and is checked out" sh -c "[ \"\$(git -C '$WS' symbolic-ref --short HEAD)\" = develop ]"
+# ---------------------------------------------------------------------------- unit
+
+t "the app's unit tests pass (widths, wrapping, keys, scenario linter)"
+node --test "$REPO/tutorial/test/app.test.mjs" >"$TMP/unit.log" 2>&1
+assert "node --test tutorial/test/app.test.mjs" test $? -eq 0
+[ "$FAIL" -eq 0 ] || grep -E '^not ok|# fail' "$TMP/unit.log"
+
+t "the scenario linter passes"
+node "$REPO/tutorial/app/scenario.mjs" lint >"$TMP/lint.log" 2>&1
+assert "scenario.mjs lint exits 0" test $? -eq 0
+
+# ---------------------------------------------------------------------------- the journey
+
+t "the whole journey, scripted (the recorded path): every step and every check pass, zero tokens"
+tuto ws "$TMP/journey.log"
+RC=$?
+WS="$TMP/ws"
+assert "tutorial exits 0" test "$RC" -eq 0
+[ "$RC" -eq 0 ] || tail -20 "$TMP/journey.log"
+assert_out "$TMP/journey.log" "You type the real commands. The agent is  SIMULATED ."
+assert_out "$TMP/journey.log" "1 install PDSF    2 /build-factory ×2    3 /verify-factory"
+for _s in install ide claude help scaffold why-twice clear context verify; do
+  assert_out "$TMP/journey.log" "factory/$_s ("
+done
+for _s in install scaffold context verify; do
+  assert "the $_s check passes" grep -q "check $_s: .* all pass" "$TMP/journey.log"
+done
+assert_out "$TMP/journey.log" "PDSF installer · "
+assert_out "$TMP/journey.log" "✓ 16 skills → .agents/skills"
+assert_out "$TMP/journey.log" "[screen: claude · simulated]"
+assert_out "$TMP/journey.log" "PDSF skills (16 · .claude/skills)"
+assert_out "$TMP/journey.log" "/build-factory    wire the backlogs"
+assert_out "$TMP/journey.log" "The agent is asking you a question (1/2)."
+assert_out "$TMP/journey.log" "❯ 1. business-backlog/ — markdown files (found in the repo)"
+assert_out "$TMP/journey.log" "The agent is asking you a question (2/2)."
+assert_out "$TMP/journey.log" "+ docs/agents/business-backlog.md  +52"
+assert_out "$TMP/journey.log" "why twice?"
+assert_out "$TMP/journey.log" "Less context, fewer hallucinations. /clear, then /build-factory again."
+assert_out "$TMP/journey.log" "Context cleared. The agent forgot this session; files and commits stay."
+assert_out "$TMP/journey.log" "The agent is asking you a question (1/1)."
+assert_out "$TMP/journey.log" "Context written: a glossary and 3 ADRs."
+assert_out "$TMP/journey.log" "✓ Scaffold present"
+assert_out "$TMP/journey.log" "🎉 Your factory is built. 8 checks green, 3 commits."
+assert_out "$TMP/journey.log" "Tomorrow, on your project"
+assert_out "$TMP/journey.log" "[ q quit  ·  r restart ]"
+assert_out "$TMP/journey.log" "curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/install.sh | sh"
+assert "the workspace is a git repo, on develop" test "$(git -C "$WS" symbolic-ref --short HEAD)" = develop
+assert "main holds the fixture's initial commit only" test "$(git -C "$WS" log --format=%s main)" = "Blackbelt (lite): initial commit"
+assert "develop: install, scaffold, context — committed for real" test "$(git -C "$WS" log --format=%s main..develop | tr '\n' '~')" = "Bootstrap project context: glossary + foundational ADRs~Wire the agentic factory: ports, method constants, scaffold~Install PDSF 0.5.0~"
+assert "the skills and AGENTS.md are in the workspace" sh -c "[ -f '$WS/.agents/skills/build-factory/SKILL.md' ] && grep -q 'PDSF:BEGIN' '$WS/AGENTS.md'"
+assert "the .claude overlay: symlinks only" sh -c "[ \"\$(readlink '$WS/.claude/skills')\" = ../.agents/skills ] && [ \"\$(readlink '$WS/CLAUDE.md')\" = AGENTS.md ]"
+assert "the ports are in docs/agents/" test -f "$WS/docs/agents/issue-tracker.md"
+assert "CONTEXT.md and 3 ADRs" sh -c "grep -q Belt '$WS/CONTEXT.md' && [ \"\$(ls '$WS'/docs/adr/*.md | wc -l | tr -d ' ')\" -eq 3 ]"
 assert "the working tree is clean" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
-assert "the fixture tests pass with no npm install" sh -c "cd '$WS' && [ ! -d node_modules ] && node --test"
-assert "every skill is installed" sh -c "for s in '$REPO'/skills/*/; do s=\${s%/}; [ -f '$WS'/.agents/skills/\${s##*/}/SKILL.md ] || exit 1; done"
-assert "AGENTS.md is wired" grep -qF '<!-- PDSF:BEGIN -->' "$WS/AGENTS.md"
-assert ".claude/skills -> ../.agents/skills" sh -c "[ \"\$(readlink '$WS/.claude/skills')\" = ../.agents/skills ]"
-assert "CLAUDE.md -> AGENTS.md" sh -c "[ \"\$(readlink '$WS/CLAUDE.md')\" = AGENTS.md ]"
-assert "the seed story is in the business backlog" test -f "$WS/business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
-assert_not "the seed story is NOT implemented in the fixture" grep -qi submit "$WS/src/blackbelt.js"
-assert_out "$TMP/claude.log" "[2] .agents + .claude symlinks"
-assert_out "$TMP/claude.log" "[1] .agents "
-assert_out "$TMP/claude.log" "✓ node --test"
-assert_out "$TMP/claude.log" "✓ CLAUDE.md -> AGENTS.md (symlink)"
-assert_out "$TMP/claude.log" "Where to look next"
+assert "the fixture's tests still pass in the workspace" sh -c "cd '$WS' && node --test </dev/null"
+assert "typing claude never launched the real claude" test ! -e "$TMP/real-claude.calls"
+assert "the progress is saved as done" grep -q '"step": 9' "$WS/.git/pdsf-tutorial.json"
+assert "the tutorial's own files stay out of the workspace tree" sh -c "! git -C '$WS' ls-files | grep -qi tutorial"
 
-t "setup with the .agents (generic) layout"
-tuto ws-generic "$TMP/generic.log" PDSF_TUTO_HARNESS=1 PDSF_TUTO_MODE=
-WS="$TMP/ws-generic"
-assert "tutorial exits 0" test $? -eq 0
-assert "skills in .agents/skills" test -f "$WS/.agents/skills/build-factory/SKILL.md"
-assert "AGENTS.md is wired" grep -qF '<!-- PDSF:BEGIN -->' "$WS/AGENTS.md"
-assert "no .claude overlay" test ! -e "$WS/.claude"
-assert "no CLAUDE.md" test ! -e "$WS/CLAUDE.md"
-assert_out "$TMP/generic.log" "✓ no .claude overlay (generic layout)"
+t "every screen fits the terminal, the coach never shows more than 2 lines, progress on every step"
+FR=$(frames_ok "$TMP/journey.log.frames" 80 24)
+assert "80×24: $FR" test -z "$FR"
+tuto ws-narrow "$TMP/narrow.log" PDSF_TUTO_COLS=60 PDSF_TUTO_ROWS=20
+FR=$(frames_ok "$TMP/narrow.log.frames" 60 20)
+assert "60×20: $FR" test -z "$FR"
+tuto ws-wide "$TMP/wide.log" PDSF_TUTO_COLS=120 PDSF_TUTO_ROWS=40
+FR=$(frames_ok "$TMP/wide.log.frames" 120 40)
+assert "120×40: $FR" test -z "$FR"
+assert "the harness screens are labelled SIMULATED" grep -q '✻ Claude Code   SIMULATED' "$TMP/journey.log.frames"
+assert "the shell and harness tabs are shown" grep -q 'shell   claude · simulated' "$TMP/journey.log.frames"
+assert "the intro and end cards are shown" sh -c "grep -q 'P D S F  ·  build your software factory' '$TMP/journey.log.frames' && grep -q 'Tomorrow, on your project' '$TMP/journey.log.frames'"
+assert "progress 1/9 … 9/9 then done" sh -c "grep -q '◉○○○○○○○○ 1/9' '$TMP/journey.log.frames' && grep -q '●●●●●●●●◉ 9/9' '$TMP/journey.log.frames' && grep -q '●●●●●●●●● done' '$TMP/journey.log.frames'"
 
-t "harness names: generic / claude are accepted, junk is refused"
-tuto ws-h-generic "$TMP/h1.log" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=
-assert "generic accepted" test $? -eq 0
-tuto ws-h-claude "$TMP/h2.log" PDSF_TUTO_HARNESS=claude PDSF_TUTO_MODE=
-assert "claude accepted" test -L "$TMP/ws-h-claude/CLAUDE.md"
-tuto ws-h-bad "$TMP/h3.log" PDSF_TUTO_HARNESS=vim PDSF_TUTO_MODE=
-assert_not "junk refused" test $? -eq 0
-assert_out "$TMP/h3.log" "unknown harness layout 'vim'"
+t "off-script input gets a one-line hint, never a dead end; ? hints, ?? does the step; Ctrl-C saves"
+cat >"$TMP/offscript.txt" <<'EOF'
+# intro card
+{enter}
+# install step: real read-only commands, an unknown one, then ? and ?? (do it for me)
+ls
+cat package.json
+git log --oneline
+rm -rf src
+claude
+{?}
+{?}
+{enter}
+{enter}
+# ide: skipped
+s
+{enter}
+# claude
+/help
+claude
+{enter}
+# /help off-script talk, then /help
+hello agent
+/help
+{enter}
+# scaffold: the second answer to the first question (off the recorded path)
+/verify-factory
+/build-factory
+{down}
+{enter}
+{enter}
+{enter}
+# why twice
+{enter}
+# clear: leave the harness, come back, then quit
+/exit
+git status
+claude
+{ctrl-c}
+EOF
+tuto ws-off "$TMP/off.log" PDSF_TUTO_SCRIPT="$TMP/offscript.txt"
+assert "Ctrl-C quits with status 130" test $? -eq 130
+assert_out "$TMP/off.log" "package.json"
+assert_out "$TMP/off.log" '"name": "blackbelt-lite"'
+assert_out "$TMP/off.log" "Blackbelt (lite): initial commit"
+assert_out "$TMP/off.log" "tutorial shell: rm: not available here (try ls, cat, git log)"
+assert_out "$TMP/off.log" "Almost: the install command is the one we need here."
+assert_out "$TMP/off.log" "Press Tab: it types the install command for you. Then Enter."
+assert_out "$TMP/off.log" "Stuck? The tutorial can do this step for you."
+assert_out "$TMP/off.log" "No IDE for now: open"
+assert_out "$TMP/off.log" "This one runs in the harness: type claude first."
+assert_out "$TMP/off.log" "(simulated) This stand-in only replays recorded sessions: no model is called."
+assert_out "$TMP/off.log" "(simulated) /verify-factory is not recorded here. On your project, it runs for real."
+assert_out "$TMP/off.log" "Almost: /build-factory is the one we need here."
+assert_out "$TMP/off.log" "answered: 2. Jira"
+assert_out "$TMP/off.log" "↳ Not the recorded answer: noted. The replay goes on with answer 1."
+assert_out "$TMP/off.log" "You left the simulated harness. Type claude to go back."
+assert_out "$TMP/off.log" "progress saved at step 7/9 (Build the factory). Re-run the same command to resume."
+assert "the src/ folder survived rm -rf src" test -f "$TMP/ws-off/src/blackbelt.js"
+assert "the recorded path went on: the scaffold is there" grep -q 'business-backlog/' "$TMP/ws-off/docs/agents/business-backlog.md"
+assert "quitting leaves the workspace intact and committed" sh -c "[ -z \"\$(git -C '$TMP/ws-off' status --porcelain)\" ] && git -C '$TMP/ws-off' log --format=%s | grep -q 'Wire the agentic factory'"
+assert "the progress is saved at step 7" grep -q '"step": 6' "$TMP/ws-off/.git/pdsf-tutorial.json"
+assert "typing claude never launched the real claude" test ! -e "$TMP/real-claude.calls"
+
+t "re-running the same command resumes where the learner stopped"
+tuto ws-off "$TMP/resume.log"
+assert "the resumed run ends with status 0" test $? -eq 0
+assert_out "$TMP/resume.log" "resuming in $TMP/ws-off"
+assert_out "$TMP/resume.log" "↻ Resumed at step 7/9: your workspace kept its files and commits."
+assert_no_out "$TMP/resume.log" "P D S F  ·  build your software factory"
+assert_no_out "$TMP/resume.log" "factory/scaffold ("
+assert "the resumed run finishes the factory" sh -c "git -C '$TMP/ws-off' log --format=%s | grep -q 'Bootstrap project context'"
+assert "the install is not replayed: one install commit" test "$(git -C "$TMP/ws-off" log --format=%s | grep -c 'Install PDSF')" -eq 1
+
+t "the end card's r restarts with a fresh workspace"
+printf '{r}\n' >"$TMP/restart.txt"
+tuto ws-off "$TMP/restart.log" PDSF_TUTO_SCRIPT="$TMP/restart.txt"
+assert "the restarted app waits on its intro card (the script ran out: status 3)" test $? -eq 3
+assert_out "$TMP/restart.log" "starting over with a fresh workspace"
+assert "the workspace is fresh again" test "$(git -C "$TMP/ws-off" log --format=%s | tr '\n' '~')" = "Blackbelt (lite): initial commit~"
+
+t "a failing step check stops the tutorial, workspace intact"
+SRC=$(fake_src badcheck)
+printf 'echo "  ✗ the scaffold is missing"\nexit 1\n' >"$SRC/tutorial/scenario/01-build-the-factory/02-scaffold/check.sh"
+( cd "$TMP" && env HOME="$TMP/home" PATH="$BASE_PATH" PDSF_SRC="$SRC" PDSF_TUTO_DIR="$TMP/ws-bad" PDSF_TUTO_SCRIPT=auto PDSF_TUTO_NO_IDE=1 sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/bad.log" 2>&1
+assert "exits non-zero" test $? -eq 1
+assert_out "$TMP/bad.log" "✗ the scaffold is missing"
+assert_out "$TMP/bad.log" "This step's check failed (✗ lines above). Your workspace is intact."
+assert_out "$TMP/bad.log" "error: the check of scaffold failed"
+assert_no_out "$TMP/bad.log" "factory/why-twice"
+assert "the workspace keeps its commits" sh -c "git -C '$TMP/ws-bad' log --format=%s | grep -q 'Wire the agentic factory'"
+
+# ---------------------------------------------------------------------------- entry script
 
 t "the entry script works piped into sh (curl … | sh)"
-( cd "$TMP" && env PDSF_SRC="$REPO" PDSF_TUTO_DIR=ws-piped PDSF_TUTO_MODE= PDSF_TUTO_PAUSE=n sh ) <"$TUTO" >"$TMP/piped.log" 2>&1
-assert "piped run exits 0" test $? -eq 0
-assert "piped run installs PDSF" test -f "$TMP/ws-piped/.agents/skills/build-factory/SKILL.md"
-assert_out "$TMP/piped.log" "Where to look next"
+( cd "$TMP" && env HOME="$TMP/home" PATH="$BASE_PATH" PDSF_SRC="$REPO" PDSF_TUTO_DIR="$TMP/ws-pipe" PDSF_TUTO_SCRIPT=auto PDSF_TUTO_NO_IDE=1 sh <"$TUTO" ) >"$TMP/pipe.log" 2>&1
+assert "piped tutorial exits 0" test $? -eq 0
+assert "piped tutorial builds the factory" grep -q Belt "$TMP/ws-pipe/CONTEXT.md"
 
-t "the default workspace is ./pdsf-tutorial-workspace"
-mkdir -p "$TMP/default-cwd"
-( cd "$TMP/default-cwd" && env PDSF_SRC="$REPO" PDSF_TUTO_MODE= PDSF_TUTO_PAUSE=n sh "$TUTO" ) </dev/null >"$TMP/default.log" 2>&1
-assert "workspace created in the current dir" test -d "$TMP/default-cwd/pdsf-tutorial-workspace/.git"
+t "the default workspace is ~/pdsf-tutorial/blackbelt"
+( cd "$TMP" && env HOME="$TMP/home" PATH="$BASE_PATH" PDSF_SRC="$REPO" PDSF_TUTO_SETUP_ONLY=y sh "$TUTO" ) </dev/null >"$TMP/default.log" 2>&1
+assert "setup-only exits 0" test $? -eq 0
+assert "~/pdsf-tutorial/blackbelt is a fresh workspace on develop" sh -c "[ \"\$(git -C '$TMP/home/pdsf-tutorial/blackbelt' symbolic-ref --short HEAD)\" = develop ] && [ -f '$TMP/home/pdsf-tutorial/blackbelt/.git/pdsf-tutorial' ]"
+assert "setup-only does not install PDSF" test ! -e "$TMP/home/pdsf-tutorial/blackbelt/.agents"
 
-t "a non-empty workspace is refused, and left untouched"
-mkdir -p "$TMP/busy" && printf 'mine\n' >"$TMP/busy/notes.txt"
-tuto busy "$TMP/busy.log" PDSF_TUTO_MODE=
-assert_not "refused" test $? -eq 0
-assert_out "$TMP/busy.log" "is not empty"
-assert "the learner's file is untouched" sh -c "[ \"\$(cat '$TMP/busy/notes.txt')\" = mine ] && [ \"\$(ls -A '$TMP/busy')\" = notes.txt ]"
+t "a non-empty directory that is not a tutorial workspace is refused, and left untouched"
+mkdir -p "$TMP/busy" && printf 'keep\n' >"$TMP/busy/mine.txt"
+tuto busy "$TMP/busy.log"
+assert "refused" test $? -ne 0
+assert_out "$TMP/busy.log" "is not empty and is not a tutorial workspace"
+assert "left untouched" sh -c "[ \"\$(ls -A '$TMP/busy')\" = mine.txt ]"
 
 t "an empty existing directory is accepted"
 mkdir -p "$TMP/empty"
-tuto empty "$TMP/empty.log" PDSF_TUTO_MODE=
-assert "accepted" test -d "$TMP/empty/.git"
+tuto empty "$TMP/empty.log" PDSF_TUTO_SETUP_ONLY=y
+assert "accepted" test $? -eq 0
+assert "fixture copied" test -f "$TMP/empty/src/blackbelt.js"
 
 t "the tutorial never writes into the PDSF source"
 SRC=$(fake_src inside)
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR="$SRC/ws" PDSF_TUTO_MODE= PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/inside.log" 2>&1
-assert_not "a workspace inside the source is refused" test $? -eq 0
-assert "nothing was created in the source" test ! -e "$SRC/ws"
-assert_out "$TMP/inside.log" "never writes there"
-assert "the checkout has no workspace nor CLI state" sh -c "[ ! -e '$REPO/pdsf-tutorial-workspace' ] && [ ! -e '$REPO/tutorial/fixture/blackbelt-lite/.blackbelt-state.json' ]"
+_before=$(cd "$SRC" && find . | LC_ALL=C sort | cksum)
+( cd "$TMP" && env HOME="$TMP/home" PDSF_SRC="$SRC" PDSF_TUTO_DIR="$SRC/ws" PDSF_TUTO_SCRIPT=auto sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/inside.log" 2>&1
+assert "a workspace inside the source is refused" test $? -ne 0
+assert_out "$TMP/inside.log" "the tutorial never writes there"
+( cd "$TMP" && env HOME="$TMP/home" PATH="$BASE_PATH" PDSF_SRC="$SRC" PDSF_TUTO_DIR="$TMP/ws-src" PDSF_TUTO_SCRIPT=auto PDSF_TUTO_NO_IDE=1 sh "$SRC/tutorial/tutorial.sh" ) </dev/null >/dev/null 2>&1
+assert "a full run leaves the source unchanged" test "$(cd "$SRC" && find . | LC_ALL=C sort | cksum)" = "$_before"
 
-t "--help documents the PDSF_TUTO_* variables"
+t "no terminal and no scripted input: a clear error"
+if command -v setsid >/dev/null 2>&1; then
+  ( cd "$TMP" && env HOME="$TMP/home" PATH="$BASE_PATH" PDSF_SRC="$REPO" PDSF_TUTO_DIR="$TMP/ws-notty" setsid sh "$TUTO" ) </dev/null >"$TMP/notty.log" 2>&1
+  assert "refused" test $? -ne 0
+  assert_out "$TMP/notty.log" "the tutorial needs a terminal"
+fi
+PDSF_TUTO_WORKSPACE="$TMP/ws" node "$REPO/tutorial/app/tuto.mjs" </dev/null >"$TMP/notty-app.log" 2>&1
+assert "the app alone refuses too" test $? -ne 0
+assert_out "$TMP/notty-app.log" "no terminal"
+
+t "PDSF_REF fetches that branch (git clone), and a missing ref fails clearly"
+REMOTE="$TMP/remote"
+mkdir -p "$REMOTE"
+( cd "$REPO" && tar cf - --exclude=.git --exclude=.pdo . ) | ( cd "$REMOTE" && tar xf - )
+git -C "$REMOTE" init -q && git -C "$REMOTE" checkout -q -b recette/tuto-21 \
+  && git -C "$REMOTE" add -A && git -C "$REMOTE" -c user.name=t -c user.email=t@t commit -q -m snapshot
+( cd "$TMP" && env -u PDSF_SRC HOME="$TMP/home" PATH="$BASE_PATH" PDSF_REPO="$REMOTE" PDSF_REF=recette/tuto-21 PDSF_TUTO_DIR="$TMP/ws-ref" PDSF_TUTO_SETUP_ONLY=y sh "$TUTO" ) </dev/null >"$TMP/ref.log" 2>&1
+assert "PDSF_REF=<branch> works" test $? -eq 0
+assert_out "$TMP/ref.log" "fetching PDSF (recette/tuto-21)"
+assert "the workspace comes from the fetched branch" test -f "$TMP/ws-ref/src/blackbelt.js"
+( cd "$TMP" && env -u PDSF_SRC HOME="$TMP/home" PATH="$BASE_PATH" PDSF_REPO="$REMOTE" PDSF_TARBALL="file://$TMP/nope.tgz" PDSF_REF=no-such-branch PDSF_TUTO_DIR="$TMP/ws-noref" PDSF_TUTO_SETUP_ONLY=y sh "$TUTO" ) </dev/null >"$TMP/noref.log" 2>&1
+assert "an unknown ref is refused" test $? -ne 0
+assert_out "$TMP/noref.log" "could not fetch PDSF (no-such-branch)"
+assert "and no workspace is created" test ! -e "$TMP/ws-noref"
+
+t "--help documents the entry contract"
 sh "$TUTO" --help >"$TMP/help.log" 2>&1
 assert "--help exits 0" test $? -eq 0
-for _v in PDSF_TUTO_DIR PDSF_TUTO_HARNESS PDSF_TUTO_MODE PDSF_TUTO_SKIP_CH2 PDSF_TUTO_SKIP_CH3 PDSF_TUTO_PAUSE PDSF_SRC; do
+for _v in PDSF_REF PDSF_SRC PDSF_TUTO_DIR PDSF_TUTO_SCRIPT "~/pdsf-tutorial/blackbelt"; do
   assert_out "$TMP/help.log" "$_v"
 done
 
-# ---------------------------------------------------------------------------- mode menu
+# ---------------------------------------------------------------------------- iteration 1 is gone
 
-t "no mode shipped: the menu says so and the tutorial exits cleanly"
-SRC=$(fake_src none)
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-nomode PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/nomode.log" 2>&1
-assert "exits 0" test $? -eq 0
-assert_out "$TMP/nomode.log" "No tutorial mode is shipped yet"
+t "one path: the modes, the mode menu and the guide skill are gone; the recorder is the maintainers'"
+assert "no tutorial/modes/" test ! -e "$REPO/tutorial/modes"
+assert "no pdsf-tutorial guide skill anywhere" sh -c "[ -z \"\$(find '$REPO' -path '$REPO/.git' -prune -o -path '$REPO/.pdo' -prune -o -name 'pdsf-tutorial' -print)\" ]"
+assert "no mode menu nor harness question in the entry script" sh -c "! grep -qE 'PDSF_TUTO_MODE|PDSF_TUTO_HARNESS|choose_harness' '$TUTO'"
+assert "no step.md / chapter.md left (the scenario is scenario.json)" sh -c "[ -z \"\$(find '$SCEN' -name step.md -o -name chapter.md)\" ]"
+assert "the recorder lives in tutorial/maintainers/record/" test -f "$REPO/tutorial/maintainers/record/record.sh"
+assert "the tutorial README says how to re-record" grep -qF 'A skill changed? Re-record' "$REPO/tutorial/README.md"
 
-t "shipped modes are listed and dispatched with the PDSF_TUTO_* contract"
-SRC=$(fake_src modes)
-for _id in a1-first b-second; do
-  mkdir -p "$SRC/tutorial/modes/$_id"
-  printf -- '---\ntitle: Mode %s\nsummary: The %s fake mode.\n---\n' "$_id" "$_id" >"$SRC/tutorial/modes/$_id/mode.md"
-  cat >"$SRC/tutorial/modes/$_id/play.sh" <<'EOF'
-{
-  echo "mode=$PDSF_TUTO_MODE"
-  echo "cwd=$(pwd -P)"
-  echo "ws=$PDSF_TUTO_WORKSPACE"
-  echo "harness=$PDSF_TUTO_HARNESS"
-  echo "skip2=$PDSF_TUTO_SKIP_CH2"
-  echo "skip3=$PDSF_TUTO_SKIP_CH3"
-  echo "pause=$PDSF_TUTO_PAUSE"
-  echo "root=$PDSF_TUTO_ROOT"
-  echo "src=$PDSF_TUTO_SRC"
-} > "$PDSF_TUTO_WORKSPACE/.played"
-exit 7
-EOF
-done
-mkdir -p "$SRC/tutorial/modes/c-unfinished"   # no play.sh: not shipped
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-mode PDSF_TUTO_PAUSE=n PDSF_TUTO_MODE=b PDSF_TUTO_SKIP_CH2=y sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/mode.log" 2>&1
-assert "the mode's exit code is the tutorial's" test $? -eq 7
-P="$TMP/ws-mode/.played"
-assert_out "$TMP/mode.log" "[1] Mode a1-first  (a1)"
-assert_out "$TMP/mode.log" "[2] Mode b-second  (b)"
-assert_not "a mode folder without play.sh is not offered" grep -q unfinished "$TMP/mode.log"
-assert "the mode is picked by id" grep -qx 'mode=b' "$P"
-assert "the mode runs in the workspace" grep -qx "cwd=$TMP/ws-mode" "$P"
-assert "PDSF_TUTO_WORKSPACE" grep -qx "ws=$TMP/ws-mode" "$P"
-assert "PDSF_TUTO_HARNESS is normalised" grep -qx 'harness=claude' "$P"
-assert "PDSF_TUTO_SKIP_CH2" grep -qx 'skip2=y' "$P"
-assert "PDSF_TUTO_SKIP_CH3 defaults to n" grep -qx 'skip3=n' "$P"
-assert "PDSF_TUTO_PAUSE" grep -qx 'pause=n' "$P"
-assert "PDSF_TUTO_ROOT" grep -qx "root=$SRC/tutorial" "$P"
-assert "PDSF_TUTO_SRC" grep -qx "src=$SRC" "$P"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-mode-n PDSF_TUTO_PAUSE=n PDSF_TUTO_MODE=1 sh "$SRC/tutorial/tutorial.sh" ) </dev/null >/dev/null 2>&1
-assert "the mode is picked by number" grep -qx 'mode=a1' "$TMP/ws-mode-n/.played"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-mode-d PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >/dev/null 2>&1
-assert "with no answer, the first mode is the default" grep -qx 'mode=a1' "$TMP/ws-mode-d/.played"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-mode-x PDSF_TUTO_PAUSE=n PDSF_TUTO_MODE=zz sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/mode-x.log" 2>&1
-assert_not "an unknown mode is refused" test $? -eq 0
-assert_out "$TMP/mode-x.log" "unknown tutorial mode 'zz'"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-mode-e PDSF_TUTO_PAUSE=n PDSF_TUTO_MODE= sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/mode-e.log" 2>&1
-assert "an empty PDSF_TUTO_MODE stops after the setup" test ! -e "$TMP/ws-mode-e/.played"
-assert_out "$TMP/mode-e.log" "No mode chosen"
+# ---------------------------------------------------------------------------- checks + recordings
 
-# ---------------------------------------------------------------------------- mode B: real agent
-
-t "mode B (real agent) is shipped: it copies the guide skill into the workspace, and only there"
-tuto ws-b "$TMP/b.log" PDSF_TUTO_MODE=b PDSF_TUTO_SKIP_CH3=y
-assert "tutorial exits 0" test $? -eq 0
-WS="$TMP/ws-b"; G="$WS/.agents/skills/pdsf-tutorial"
-assert_out "$TMP/b.log" "Real agent  (b)"
-assert_out "$TMP/b.log" "✓ the install is committed"
-assert "the guide skill is in .agents/skills/" test -f "$G/SKILL.md"
-assert "it is the pdsf-tutorial skill" test "$(sed -n 's/^name: //p' "$G/SKILL.md")" = pdsf-tutorial
-assert "the Claude layout sees it through .claude/skills" test -f "$WS/.claude/skills/pdsf-tutorial/SKILL.md"
-assert "its lesson plan comes with it" sh -c "[ -f '$G/tuto.sh' ] && [ -f '$G/lib/scenario.sh' ] && [ -f '$G/scenario/01-build-the-factory/02-scaffold/check.sh' ]"
-assert "no recording comes with it (nothing is replayed)" test -z "$(find "$G/scenario" -name recording)"
-assert "the guide is git-excluded: the working tree stays clean" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
-assert "the guide is not committed" test -z "$(git -C "$WS" ls-files .agents/skills/pdsf-tutorial)"
-assert "the learner stays on develop" test "$(git -C "$WS" symbolic-ref --short HEAD)" = develop
-assert "the learner's answers are kept for the guide" sh -c "grep -qx PDSF_TUTO_SKIP_CH3=y '$G/tutorial.env' && grep -qx PDSF_TUTO_SKIP_CH2=n '$G/tutorial.env' && grep -qx PDSF_TUTO_HARNESS=claude '$G/tutorial.env'"
-assert "the rest of .agents/skills is exactly what install.sh installed" test "$(ls "$WS/.agents/skills" | grep -vx pdsf-tutorial | tr '\n' ' ')" = "$(ls "$REPO/skills" | tr '\n' ' ')"
-assert_out "$TMP/b.log" "cd $WS"
-assert_out "$TMP/b.log" "     claude"
-assert_out "$TMP/b.log" "/pdsf-tutorial"
-assert_out "$TMP/b.log" "Read .agents/skills/pdsf-tutorial/SKILL.md and follow it."
-assert_out "$TMP/b.log" "Skipped chapter(s): 3."
-assert_out "$TMP/b.log" "Where to look next"
-assert "the guide's source lives in the tutorial, not under skills/" sh -c "[ -z \"\$(find '$REPO/skills' -name 'pdsf-tutorial*')\" ] && [ -f '$REPO/tutorial/modes/b-real-agent/pdsf-tutorial/SKILL.md' ]"
-
-t "mode B with the generic layout"
-tuto ws-b-generic "$TMP/b-generic.log" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=b
-assert "tutorial exits 0" test $? -eq 0
-assert "the guide is in .agents/skills/" test -f "$TMP/ws-b-generic/.agents/skills/pdsf-tutorial/SKILL.md"
-assert "no .claude overlay" test ! -e "$TMP/ws-b-generic/.claude"
-assert_not "no claude command suggested" grep -qx '     claude' "$TMP/b-generic.log"
-assert_out "$TMP/b-generic.log" "Read .agents/skills/pdsf-tutorial/SKILL.md and follow it."
-
-t "the guide's tuto.sh: plan, next, show, action, check, skip"
-GT="sh $G/tuto.sh"
-$GT plan >"$TMP/plan.log" 2>&1
-assert "plan runs" test $? -eq 0
-assert_out "$TMP/plan.log" "[x] 01-build-the-factory/01-install"
-assert_out "$TMP/plan.log" "[ ] 01-build-the-factory/02-scaffold"
-assert_out "$TMP/plan.log" "Chapter 3 — Go further  (skipped)"
-assert "plan lists every step" test "$(grep -c '^  \[' "$TMP/plan.log")" -eq "$(find "$REPO/tutorial/scenario" -name step.md | wc -l | tr -d ' ')"
-assert "next is the scaffold" test "$($GT next)" = 01-build-the-factory/02-scaffold
-$GT show 1.2 >"$TMP/show.log" 2>&1
-assert_out "$TMP/show.log" "# Scaffold the factory"
-assert_out "$TMP/show.log" "Command: /build-factory"
-assert_out "$TMP/show.log" "## What you do"
-assert_out "$TMP/show.log" "## Under the hood"
-assert "a full step id works too" sh -c "$GT show 02-use-the-factory/04-implement | grep -qF 'Command: /implement'"
-assert_not "an unknown step is refused" $GT show 9.9
-$GT action 2.1 >"$TMP/b-action.log" 2>&1
-assert_out "$TMP/b-action.log" "Belt US-1 [user] Submit my belt for sensei validation"
-assert_not "the scaffold check fails before the agent ran" $GT check 1.2
-assert "a failed check is not recorded" test "$($GT next)" = 01-build-the-factory/02-scaffold
-mkdir -p "$WS/docs/agents" "$WS/docs/adr"
-printf 'Tool: markdown, under business-backlog/\n' >"$WS/docs/agents/business-backlog.md"
-printf 'Tickets live in .scratch/\n' >"$WS/docs/agents/issue-tracker.md"
-for _p in triage-labels domain us-format; do printf 'x\n' >"$WS/docs/agents/$_p.md"; done
-printf '\n## Agent skills\n' >>"$WS/AGENTS.md"
-printf '# CONTEXT\n' >"$WS/CONTEXT.md"
-assert "the scaffold check passes once scaffolded, from any directory" sh -c "cd '$WS/src' && $GT check 1.2"
-assert "a passed check is recorded: next is the context" test "$($GT next)" = 01-build-the-factory/03-context
-assert_not "the context check fails on a stub CONTEXT.md" $GT check 1.3
-assert "the chapter text is shown" sh -c "$GT chapter 2 | grep -qF 'Chapter 2 — Use the factory'"
-assert_not "chapter 1 cannot be skipped" $GT skip 1 y
-assert "chapter 2 can be skipped" $GT skip 2 y
-assert "a skipped chapter shows in the plan" sh -c "$GT plan | grep -qF 'Chapter 2 — Use the factory  (skipped)'"
-assert "and un-skipped" sh -c "$GT skip 2 n && ! $GT plan | grep -qF 'Chapter 2 — Use the factory  (skipped)'"
-assert_not "the guide's files never show in git status" sh -c "git -C '$WS' status --porcelain | grep -q pdsf-tutorial"
-
-t "the guide keeps working once the fetched PDSF source is gone"
-SRC=$(fake_src gone)
-cp -R "$REPO/tutorial/modes/." "$SRC/tutorial/modes/"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-b-gone PDSF_TUTO_PAUSE=n PDSF_TUTO_MODE=b PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y sh "$SRC/tutorial/tutorial.sh" ) </dev/null >/dev/null 2>&1
-rm -rf "$SRC"
-GG="$TMP/ws-b-gone/.agents/skills/pdsf-tutorial"
-assert "plan still runs" sh "$GG/tuto.sh" plan
-assert "the install is recorded as done" sh -c "sh '$GG/tuto.sh' plan | grep -qF '[x] 01-build-the-factory/01-install'"
-assert_not "checks still run (and judge the workspace)" sh "$GG/tuto.sh" check 1.3
-assert "chapters 2 and 3 are skipped in the plan" sh -c "[ \"\$(sh '$GG/tuto.sh' plan | grep -c '(skipped)')\" -eq 2 ]"
-
-t "the guide skill: portable, and it covers every agent step"
-GS="$REPO/tutorial/modes/b-real-agent/pdsf-tutorial/SKILL.md"
-assert_not "no harness-specific tool or output style" grep -qiE 'AskUserQuestion|TodoWrite|output.style|Skill tool|subagent_type|Claude Code' "$GS"
-for _s in "$REPO"/tutorial/scenario/*/*/step.md; do
-  _d=${_s%/step.md}
-  [ "$(sed -n 's/^kind: //p' "$_s")" = agent ] || continue
-  _id="${_d%/*}"; _id="${_id##*/}/${_d##*/}"
-  assert "the guide has hints for $_id" grep -qF "$_id" "$GS"
-done
-assert "the guide quotes the check's ✓/✗ lines verbatim" grep -qF 'quote its ✓/✗ lines verbatim' "$GS"
-assert "the guide says the install is committed on main, develop created from it" grep -qF 'committed the install on **`main`**' "$GS"
-assert "the PDO recipe is documented, as optional" grep -qF '## Mode B from a shared PDO instance (optional)' "$REPO/tutorial/README.md"
-assert "the mode documents its guide" grep -qF 'tuto.sh' "$REPO/tutorial/modes/b-real-agent/mode.md"
-
-# ---------------------------------------------------------------------------- scenario
-
-t "the scenario: 3 chapters, every step with English learner text and a check"
-SCEN="$REPO/tutorial/scenario"
-export PDSF_TUTO_ROOT="$REPO/tutorial"
+PDSF_TUTO_ROOT="$REPO/tutorial"; export PDSF_TUTO_ROOT
 . "$REPO/tutorial/lib/scenario.sh"
-_chapters=$(tuto_chapters)
-assert "three chapters" test "$(printf '%s\n' "$_chapters" | wc -l | tr -d ' ')" -eq 3
-assert "chapter 1 is not skippable" test "$(tuto_meta "$SCEN/01-build-the-factory/chapter.md" skippable)" = false
-assert "chapter 2 is skippable" test "$(tuto_meta "$SCEN/02-use-the-factory/chapter.md" skippable)" = true
-assert "chapter 3 is skippable" test "$(tuto_meta "$SCEN/03-go-further/chapter.md" skippable)" = true
-_commands=""
-for _c in $_chapters; do
-  assert "${_c##*/} has a title" test -n "$(tuto_meta "$_c/chapter.md" title)"
-  for _s in $(tuto_steps "$_c"); do
-    _id=$(tuto_step_id "$_s")
-    assert "$_id has a title" test -n "$(tuto_step_title "$_s")"
-    assert "$_id has a known kind" sh -c "case '$(tuto_step_kind "$_s")' in setup|agent|reading) exit 0;; *) exit 1;; esac"
-    assert "$_id says what you do" test -n "$(tuto_section "$_s/step.md" "What you do")"
-    assert "$_id says what happens under the hood" test -n "$(tuto_section "$_s/step.md" "Under the hood")"
-    assert "$_id has a check" test -f "$_s/check.sh"
-    if [ "$(tuto_step_kind "$_s")" = agent ]; then
-      assert "$_id (agent) names its command" test -n "$(tuto_step_command "$_s")"
-      assert "$_id (agent) has a recording slot" test -d "$_s/recording"
-    fi
-    _commands="$_commands $(tuto_step_command "$_s" | sed -n 's#^/\([a-z-]*\).*#\1#p')"
-  done
-done
-assert "chapter 1 runs /build-factory (scaffold, context) then /verify-factory" test "$(tuto_steps "$SCEN/01-build-the-factory" | while read -r s; do tuto_step_command "$s"; done | grep '^/' | tr '\n' ' ')" = "/build-factory /build-factory /verify-factory "
-assert "chapter 2 runs /grill-with-docs → /to-spec → /to-tickets → /implement" test "$(tuto_steps "$SCEN/02-use-the-factory" | while read -r s; do tuto_step_command "$s"; done | tr '\n' ' ')" = "/grill-with-docs /to-spec /to-tickets /implement "
-for _cmd in $_commands; do
-  assert "/$_cmd is a real PDSF skill" test -f "$REPO/skills/$_cmd/SKILL.md"
-done
+. "$REPO/tutorial/lib/recording.sh"
 
 t "step checks judge the real workspace state"
-WS="$TMP/ws-claude"
-export PDSF_TUTO_SRC="$REPO" PDSF_TUTO_WORKSPACE="$WS" PDSF_TUTO_HARNESS=claude
-assert "install check passes on a fresh workspace" tuto_run_check "$SCEN/01-build-the-factory/01-install"
-check_as_generic() ( PDSF_TUTO_HARNESS=generic; export PDSF_TUTO_HARNESS; tuto_run_check "$1" )
-assert_not "the install check fails against the wrong layout" check_as_generic "$SCEN/01-build-the-factory/01-install"
+( cd "$TMP" && env HOME="$TMP/home" PDSF_SRC="$REPO" PDSF_TUTO_DIR="$TMP/ws-check" PDSF_TUTO_SETUP_ONLY=y sh "$TUTO" ) </dev/null >/dev/null 2>&1
+export PDSF_TUTO_SRC="$REPO" PDSF_TUTO_WORKSPACE="$TMP/ws-check"
+assert_not "the install check fails before the install" tuto_run_check "$SCEN/01-build-the-factory/01-install"
+tuto_run_action "$SCEN/01-build-the-factory/01-install" >"$TMP/install-action.log" 2>&1
+assert "the install action runs install.sh for real and commits" test $? -eq 0
+assert_out "$TMP/install-action.log" "@var skills=16"
+assert "the install check passes after it" tuto_run_check "$SCEN/01-build-the-factory/01-install"
+tuto_run_action "$SCEN/01-build-the-factory/01-install" >/dev/null 2>&1
+assert "the install action is idempotent (a resumed install)" test $? -eq 0
 for _s in 02-scaffold 03-context; do
   assert_not "the $_s check fails before the agent ran" tuto_run_check "$SCEN/01-build-the-factory/$_s"
 done
 for _s in 01-grill-with-docs 02-to-spec 03-to-tickets 04-implement; do
-  assert_not "the $_s check fails before the agent ran" tuto_run_check "$SCEN/02-use-the-factory/$_s"
+  assert_not "the bonus $_s check fails before the agent ran" tuto_run_check "$SCEN/02-use-the-factory/$_s"
 done
-for _s in $(tuto_steps "$SCEN/03-go-further"); do
-  assert "$(tuto_step_id "$_s") check passes" tuto_run_check "$_s"
-done
-tuto_run_action "$SCEN/02-use-the-factory/01-grill-with-docs" >"$TMP/action.log" 2>&1
-assert "the grilling step's action runs" test $? -eq 0
-assert_out "$TMP/action.log" "Belt US-1 [user] Submit my belt for sensei validation"
-assert "a step action leaves the workspace clean" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
 
-t "a scaffolded workspace passes the scaffold check"
-mkdir -p "$WS/docs/agents" "$WS/docs/adr"
-printf 'Tool: markdown, under business-backlog/\n' >"$WS/docs/agents/business-backlog.md"
-printf 'Tickets live in .scratch/\n' >"$WS/docs/agents/issue-tracker.md"
-for _p in triage-labels domain us-format; do printf 'x\n' >"$WS/docs/agents/$_p.md"; done
-printf '\n## Agent skills\n' >>"$WS/AGENTS.md"
-printf '# CONTEXT\n' >"$WS/CONTEXT.md"
-assert "scaffold check passes" tuto_run_check "$SCEN/01-build-the-factory/02-scaffold"
-assert_not "a stub CONTEXT.md does not pass the context check" tuto_run_check "$SCEN/01-build-the-factory/03-context"
-
-# ---------------------------------------------------------------------------- recordings
-
-. "$REPO/tutorial/lib/recording.sh"
-
-t "every agent step has a recording of a real run, in the documented format"
-for _s in $(for _c in $(tuto_chapters); do tuto_steps "$_c"; done); do
-  [ "$(tuto_step_kind "$_s")" = agent ] || continue
+t "every recording is a real run, in the documented format"
+for _s in $(tuto_recorded_steps); do
   _id=$(tuto_step_id "$_s")
-  assert "$_id has a recording" tuto_has_recording "$_s"
-  tuto_has_recording "$_s" || continue
   assert "$_id: the transcript names its step" test "$(rec_meta "$_s" step)" = "$_id"
-  assert "$_id: the transcript names the step's command" test "$(rec_meta "$_s" command)" = "$(tuto_step_command "$_s")"
   assert "$_id: format 1" test "$(rec_meta "$_s" format)" = 1
-  for _k in branch recorded recorder pdsf harness; do
+  for _k in command branch recorded recorder pdsf harness; do
     assert "$_id: the transcript records its $_k" test -n "$(rec_meta "$_s" $_k)"
   done
   assert "$_id: recorded by a real agent (Claude Code …)" sh -c 'printf "%s" "$1" | grep -q "^Claude Code [0-9]"' _ "$(rec_meta "$_s" recorder)"
-  assert "$_id: session is new or continued" sh -c 'case "$1" in new|continued) exit 0;; *) exit 1;; esac' _ "$(rec_meta "$_s" session)"
   _n=$(rec_turn_count "$_s")
-  assert "$_id: at least one exchange" test "$_n" -ge 2
-  assert "$_id: the first turn types the step's command" sh -c 'case "$1" in "$2"*) exit 0;; *) exit 1;; esac' _ "$(rec_turn_text "$_s" 1)" "$(tuto_step_command "$_s")"
+  assert "$_id: the first turn types the step's command" sh -c 'case "$1" in "$2"*) exit 0;; *) exit 1;; esac' _ "$(rec_turn_text "$_s" 1)" "$(rec_meta "$_s" command)"
   assert "$_id: the agent has the last word" test "$(rec_turn_role "$_s" "$_n")" = agent
-  _i=1; _alt=0
-  while [ "$_i" -le "$_n" ]; do
-    _r=$(rec_turn_role "$_s" "$_i")
-    [ $((_i % 2)) -eq 1 ] && [ "$_r" != learner ] && _alt=1
-    [ $((_i % 2)) -eq 0 ] && [ "$_r" != agent ] && _alt=1
-    [ -n "$(rec_turn_text "$_s" "$_i")" ] || _alt=1
-    _i=$((_i + 1))
-  done
-  assert "$_id: turns alternate learner / agent, none empty" test "$_alt" -eq 0
   assert "$_id: no machine-specific path leaked into the recording" sh -c "! grep -rqE '/tmp/|/home/|/Users/' '$_s/recording'"
 done
-assert "/to-spec continues the grilling's agent session" test "$(rec_meta "$SCEN/02-use-the-factory/02-to-spec" session)" = continued
-assert "the scaffold recording keeps alternative answers for its questions" test -n "$(rec_turn_choices "$SCEN/01-build-the-factory/02-scaffold" 3)"
-assert "the implement recording works on a feature branch merged into the integration branch" sh -c 'printf "%s" "$1" | grep -q "^feature/"' _ "$(rec_meta "$SCEN/02-use-the-factory/04-implement" via)"
-
-# max_width FILE -> the widest line of FILE, in terminal columns (escape sequences ignored, emoji
-# count 2): what the terminal needs to show it without wrapping.
-max_width() {
-  node -e '
-    const wide = (c) => c >= 0x1f000 || [0x2705, 0x274c, 0x2795, 0x2796, 0x2b50, 0x23f3, 0x2728, 0x2753].includes(c);
-    let max = 0;
-    for (const line of require("fs").readFileSync(process.argv[1], "utf8").split("\n")) {
-      let n = 0;
-      for (const ch of line.replace(/\x1b\[[0-9;]*m/g, "")) n += wide(ch.codePointAt(0)) ? 2 : 1;
-      if (n > max) max = n;
-    }
-    console.log(max);
-  ' "$1"
-}
-
-t "tuto_md renders markdown for the terminal, within the width"
-_md() { _w=$1; shift; printf '%s\n' "$@" | tuto_md "$_w" "  │ " >"$TMP/md.out"; }
-_md 60 "A paragraph that is long enough to need wrapping at sixty columns, and then some more words." "" "- a list item that is long enough to wrap too, so its next line hangs under the text"
-assert "paragraphs wrap within the width" test "$(max_width "$TMP/md.out")" -le 60
-assert "every line keeps the prefix" sh -c "! grep -qv '^  │ ' '$TMP/md.out'"
-assert "a wrapped list item hangs under its text" grep -q '^  │   [a-z]' "$TMP/md.out"
-_md 80 '```' 'node src/cli.js submit B-2 ada' '```'
-assert "code fences drop the backtick lines" sh -c "! grep -q '\`\`\`' '$TMP/md.out'"
-assert "code fences keep their content, indented" grep -qF '│   node src/cli.js submit B-2 ada' "$TMP/md.out"
-_md 60 '```' "  see docs/agents/issue-tracker.md and docs/agents/triage-labels.md for the missing BELT-US-1 parts" '```'
-assert "a wide fence line stays within the width" test "$(max_width "$TMP/md.out")" -le 60
-assert "a wide fence line breaks between words, not inside one" sh -c "grep -qF 'docs/agents/issue-tracker.md' '$TMP/md.out' && grep -qF 'docs/agents/triage-labels.md' '$TMP/md.out' && grep -qF 'BELT-US-1' '$TMP/md.out'"
-assert "a wide fence line goes on hanging lines" test "$(grep -c '^  │       [a-zB]' "$TMP/md.out")" -ge 1
-printf '%s\n' "As a student, I want to submit my belt when all objectives are validated, instead of waiting for someone to notice it." "  - when objectives are missing, the submission is refused, and the refusal lists the missing objectives" "**not** markdown" | tuto_wrap 60 "  " >"$TMP/wrap.out"
-assert "tuto_wrap keeps every line within the width" test "$(max_width "$TMP/wrap.out")" -le 60
-assert "tuto_wrap loses no word" sh -c "[ \"\$(tr -s ' \n' '  ' <'$TMP/wrap.out' | sed 's/^ *//;s/ *$//')\" = 'As a student, I want to submit my belt when all objectives are validated, instead of waiting for someone to notice it. - when objectives are missing, the submission is refused, and the refusal lists the missing objectives **not** markdown' ]"
-assert "tuto_wrap hangs a wrapped line past its own indent" grep -q '^      [a-z]' "$TMP/wrap.out"
-assert "tuto_wrap prints text as typed (no markdown)" grep -qF '  **not** markdown' "$TMP/wrap.out"
-_md 80 '| Role | Meaning |' '|---|---|' '| `needs-triage` | a human must evaluate it |' '| `wontfix` | will not be done |'
-assert "a narrow table is aligned in columns" grep -qF '`wontfix`      │ will not be done' "$TMP/md.out"
-assert "a table header is ruled off" grep -qF '─┼─' "$TMP/md.out"
-assert "the |---| line is not shown" sh -c "! grep -qF -- '|---|' '$TMP/md.out'"
-_md 70 '| # | Check | Result | Evidence |' '|---|---|---|---|' \
-  '| 1 | Scaffold present | ✅ pass | `CLAUDE.md` links to `AGENTS.md`. It has the method constants and `## Agent skills`. All 4 port files in `docs/agents/` exist, plus `docs/adr/` and `CONTEXT.md`. |' \
-  '| 2 | Git-flow health | ✅ pass for `develop`, ➖ n/a for protection | `develop` exists and so does `main`. The repo has no remote, so there is no branch protection to check. |'
-assert "a wide table (with emoji) is wrapped within the width" test "$(max_width "$TMP/md.out")" -le 70
-assert "a wide table keeps its column bars" test "$(grep -c '│ .* │ .* │ ' "$TMP/md.out")" -ge 4
-_md 60 '| a | b | c | d | e | f | g | h |' '|-|-|-|-|-|-|-|-|' '| aaaaaaaaaa aaaaaaaa | bbbbbbbbbbbbbb | cccccccccccc | dddddddddddd | eeeeeeeeeeee | ffffffffffff | ggggggggggg | hhhhhhhhhhh |'
-assert "a table too wide for columns becomes header: value fields" sh -c "grep -qF '• a: aaaaaaaaaa aaaaaaaa' '$TMP/md.out' && grep -qF '  h: hhhhhhhhhhh' '$TMP/md.out'"
-assert "the fields stay within the width" test "$(max_width "$TMP/md.out")" -le 60
-_md 60 "a-very-long-word-$(printf '%0100d' 0)"
-assert "a word longer than a line is cut, not left to the terminal" test "$(max_width "$TMP/md.out")" -le 60
-_md 80 'Run `node --test` and **read** it.'
-assert "without colours, code spans keep their backticks" grep -qF 'Run `node --test` and read it.' "$TMP/md.out"
-( _TUTO_B=$(printf '\033[1m'); _TUTO_D=$(printf '\033[2m'); _TUTO_R=$(printf '\033[0m')
-  printf '%s\n' 'Run `node --test` and **read** it.' | tuto_md 80 ) >"$TMP/md.out"
-assert "with colours, code spans are highlighted instead of backticked" sh -c "! grep -qF '\`' '$TMP/md.out' && grep -qF \"\$(printf '\033[36mnode --test\033[39m')\" '$TMP/md.out'"
-assert "with colours, bold is closed without resetting the line" grep -qF "$(printf '\033[1mread\033[22m')" "$TMP/md.out"
-for _f in "$SCEN"/*/*/recording/transcript.md; do
-  _d=${_f%/recording/*}; _n=$(rec_turn_count "$_d"); _i=1
-  while [ "$_i" -le "$_n" ]; do rec_turn_text "$_d" "$_i" | tuto_md 60 "  │   "; _i=$((_i + 1)); done
-done >"$TMP/md.out"
-assert "every recorded turn renders within 60 columns" test "$(max_width "$TMP/md.out")" -le 60
+assert "chapter one's recordings are kept" test "$(tuto_recorded_steps | grep -c 01-build-the-factory)" -eq 3
+assert "the bonus recordings are kept for the bonus chapter" test "$(tuto_recorded_steps | grep -c 02-use-the-factory)" -eq 4
 
 t "the recording library parses turns, choices and the replay keys"
 FAKE="$TMP/fake-step"
@@ -490,200 +399,11 @@ assert "rec_apply commits on the via branch, merged --no-ff" sh -c "[ \"\$(git -
 assert "rec_apply writes the files and removes the removed ones" sh -c "[ -f '$REPLAY/notes/n.md' ] && [ ! -e '$REPLAY/gone.txt' ] && [ -z \"\$(git -C '$REPLAY' status --porcelain)\" ]"
 assert "rec_apply creates the other branches" git -C "$REPLAY" show-ref --verify --quiet refs/heads/extra/one
 
-# ---------------------------------------------------------------------------- mode A1
-
-# A `claude` on PATH that leaves a mark: mode A1 must never call an agent.
-mkdir -p "$TMP/bin"
-printf '#!/bin/sh\necho "$*" >> "%s/claude-called"\nexit 1\n' "$TMP" >"$TMP/bin/claude"
-chmod +x "$TMP/bin/claude"
-
-t "the menu offers the three modes: A1, A2, B"
-assert_out "$TMP/claude.log" "[1] Narrated replay  (a1)"
-assert_out "$TMP/claude.log" "[2] Simulated session  (a2)"
-assert_out "$TMP/claude.log" "[3] Real agent  (b)"
-
-t "mode A1, non-interactive, every chapter: every step and every check pass, zero tokens"
-tuto ws-a1 "$TMP/a1.log" PATH="$TMP/bin:$PATH" COLUMNS=80 PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
-assert "the tutorial exits 0" test $? -eq 0
-# (the install command is shown whole, to be copied: it is the one line allowed to be longer)
-sed -n '/^──── Mode A1/,$p' "$TMP/a1.log" | grep -v '^  \$ curl ' >"$TMP/a1-mode.log"
-assert "every line of the mode fits an 80-column terminal" test "$(max_width "$TMP/a1-mode.log")" -le 80
-WS="$TMP/ws-a1"
-assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
-assert_out "$TMP/a1.log" "12 steps played, every check green; 7 of them replayed (0 tokens)."
-assert "every agent step is flagged SIMULATED" test "$(grep -c '^  ┌─ SIMULATED ─ replay of a real' "$TMP/a1.log")" -eq 7
-assert "every agent step closes its SIMULATED frame" test "$(grep -c '^  └─ SIMULATED ─' "$TMP/a1.log")" -eq 7
-assert "no check failed" sh -c "! grep -q '✗' '$TMP/a1.log'"
-awk '/^Runs for real:/ { on = 1; next } /^  ┌─ SIMULATED|^Check \(runs/ { on = 0 } on' "$TMP/a1.log" >"$TMP/a1-actions.log"
-assert "the A1 run shows action output" grep -qF 'business-backlog/BELT-US-1-' "$TMP/a1-actions.log"
-assert "action output is wrapped, never cut with …" sh -c "! grep -q '…\$' '$TMP/a1-actions.log'"
-for _cmd in "> /build-factory" "> /verify-factory" "> /grill-with-docs" "> /to-spec" "> /to-tickets" "> /implement" "\$ curl -fsSL"; do
-  assert_out "$TMP/a1.log" "$_cmd"
-done
-assert "every step says what you do and what happens under the hood" sh -c "[ \"\$(grep -c '^What you do' '$TMP/a1.log')\" -eq 12 ] && [ \"\$(grep -c '^Under the hood' '$TMP/a1.log')\" -eq 12 ]"
-assert_out "$TMP/a1.log" "you › /build-factory"
-assert_out "$TMP/a1.log" "agent ›"
-assert_out "$TMP/a1.log" "What changed in your workspace (real git output):"
-assert_out "$TMP/a1.log" "Runs for real:"
-assert_out "$TMP/a1.log" "Belt US-1 [user] Submit my belt for sensei validation"
-assert_out "$TMP/a1.log" "Where to look next"
-assert "chapter 1: both backlogs are local markdown" sh -c "grep -q 'business-backlog/' '$WS/docs/agents/business-backlog.md' && grep -q '.scratch' '$WS/docs/agents/issue-tracker.md'"
-assert "chapter 1: CONTEXT.md and the founding ADRs are on develop" sh -c "git -C '$WS' show develop:CONTEXT.md | grep -q Belt && git -C '$WS' ls-tree --name-only develop docs/adr/ | grep -q '\.md$'"
-assert "chapter 2: the story's integration branch is checked out" sh -c "git -C '$WS' symbolic-ref --short HEAD | grep -qi '^integration/belt-us-1'"
-assert "chapter 2: tickets ready for an agent on the local tracker" sh -c "grep -l 'ready-for-agent' '$WS'/.scratch/*/tickets/*.md"
-assert "chapter 2: the business story links back to its ticket" grep -q '^## Comments' "$WS/business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
-assert "chapter 2: the ticket was merged from its feature branch" sh -c "git -C '$WS' log -1 --format=%s | grep -q '^Merge feature/'"
-assert "chapter 2: node --test is green" sh -c "cd '$WS' && node --test"
-assert "chapter 2: the submission rule is tested" grep -q 'submit' "$WS/test/blackbelt.test.js"
-( cd "$WS" && node src/cli.js reset && node src/cli.js submit B-3 linus ) >"$TMP/submit-ok.log" 2>&1
-assert "Linus submits his belt: it awaits the sensei's validation" grep -q 'B-3: NEED_VALIDATION' "$TMP/submit-ok.log"
-( cd "$WS" && node src/cli.js submit B-2 ada ) >"$TMP/submit-ko.log" 2>&1
-assert "Ada's submission is refused (exit 2)" test $? -eq 2
-assert "the refusal names the remaining objective" grep -q 'Run a refactoring workshop' "$TMP/submit-ko.log"
-( cd "$WS" && node src/cli.js reset ) >/dev/null 2>&1
-assert "the workspace is clean at the end" sh -c "[ -z \"\$(git -C '$WS' status --porcelain)\" ]"
-
-t "mode A1 with the .agents (generic) layout, chapters 2 and 3 skipped"
-tuto ws-a1-generic "$TMP/a1-generic.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y
-assert "the tutorial exits 0" test $? -eq 0
-assert_out "$TMP/a1-generic.log" "4 steps played, every check green; 3 of them replayed (0 tokens)."
-assert_out "$TMP/a1-generic.log" "Skipping Chapter 2"
-assert_out "$TMP/a1-generic.log" "Skipping Chapter 3"
-assert_not "no chapter 2 step was played" grep -q 'Step 2\.' "$TMP/a1-generic.log"
-assert "chapter 1's state is reached" sh -c "cd '$TMP/ws-a1-generic' && git show develop:CONTEXT.md | grep -q Belt && [ ! -e CLAUDE.md ]"
-assert "no integration branch without chapter 2" sh -c "[ -z \"\$(git -C '$TMP/ws-a1-generic' branch --list 'integration/*')\" ]"
-assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
-assert_out "$TMP/a1-generic.log" "Where to look next"
-
-t "mode A1 stops on a failing step check"
-SRC=$(fake_src a1-broken)
-cp -R "$REPO/tutorial/modes/." "$SRC/tutorial/modes/"
-rm "$SRC/tutorial/scenario/01-build-the-factory/03-context/recording/files/CONTEXT.md"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-a1-broken PDSF_TUTO_MODE=a1 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/a1-broken.log" 2>&1
-assert_not "the tutorial fails" test $? -eq 0
-assert_out "$TMP/a1-broken.log" "the check of 01-build-the-factory/03-context failed"
-assert_not "it does not go on to the next step" grep -q 'Step 1.4' "$TMP/a1-broken.log"
-
-# ---------------------------------------------------------------------------- mode A2
-
-# ws_state WS -> what makes a workspace's state: every branch with its tree, every commit message.
-ws_state() {
-  git -C "$1" for-each-ref --format='%(refname:short) %(tree)' refs/heads
-  git -C "$1" log --all --format='%s %T' | LC_ALL=C sort
-}
-
-t "mode A2, non-interactive (the recorded path), every chapter: every check passes, A1's end state, zero tokens"
-tuto ws-a2 "$TMP/a2.log" PATH="$TMP/bin:$PATH" COLUMNS=80 PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n
-assert "the tutorial exits 0" test $? -eq 0
-sed -n '/^──── Mode A2/,$p' "$TMP/a2.log" | grep -v '^  \$ curl ' >"$TMP/a2-mode.log"
-assert "every line of the mode fits an 80-column terminal" test "$(max_width "$TMP/a2-mode.log")" -le 80
-assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
-assert_out "$TMP/a2.log" "12 steps played, every check green; 7 of them in the simulated session, 0"
-assert_out "$TMP/a2.log" "replayed for you, 0 off-script answer(s) (0 tokens)."
-assert "no check failed" sh -c "! grep -q '✗' '$TMP/a2.log'"
-assert "one session per chapter with agent steps" test "$(grep -c '^┌─ SIMULATED SESSION ─ a sub-shell in your workspace' "$TMP/a2.log")" -eq 2
-assert "every session returns to the tutorial" test "$(grep -c '^└─ SIMULATED SESSION ─ back in the tutorial' "$TMP/a2.log")" -eq 2
-assert "the learner types claude in each session" test "$(grep -c '^\$ claude$' "$TMP/a2.log")" -eq 2
-assert_out "$TMP/a2.log" "✻ claude — SIMULATED stand-in, PDSF tutorial"
-assert "every agent step is replayed in a SIMULATED frame" test "$(grep -c '^  ┌─ SIMULATED ─ replay of a real' "$TMP/a2.log")" -eq 7
-assert "every SIMULATED frame is closed" test "$(grep -c '^  └─ SIMULATED ─' "$TMP/a2.log")" -eq 7
-for _cmd in "> /build-factory" "> /verify-factory" "> /grill-with-docs" "> /to-spec" "> /to-tickets" "> /implement" "> /exit"; do
-  assert_out "$TMP/a2.log" "$_cmd"
-done
-assert "every step says what you do and what happens under the hood" sh -c "[ \"\$(grep -c '^What you do' '$TMP/a2.log')\" -eq 12 ] && [ \"\$(grep -c '^Under the hood' '$TMP/a2.log')\" -eq 12 ]"
-assert_out "$TMP/a2.log" "Your answer — Enter for 1, the recorded one; another number; or your own"
-assert_out "$TMP/a2.log" "  1) Keep the local markdown folder business-backlog/: one story per file,"
-assert_out "$TMP/a2.log" "  2) Jira"
-assert_out "$TMP/a2.log" "Belt US-1 [user] Submit my belt for sensei validation"
-assert_out "$TMP/a2.log" "What changed in your workspace (real git output):"
-assert_out "$TMP/a2.log" "Chapter 2: the checks of the session's steps"
-assert_out "$TMP/a2.log" "Where to look next"
-assert "the workspace ends in exactly A1's state" test "$(ws_state "$TMP/ws-a2")" = "$(ws_state "$TMP/ws-a1")"
-assert "the same branch is checked out" test "$(git -C "$TMP/ws-a2" symbolic-ref --short HEAD)" = "$(git -C "$TMP/ws-a1" symbolic-ref --short HEAD)"
-assert "the workspace is clean at the end" sh -c "[ -z \"\$(git -C '$TMP/ws-a2' status --porcelain)\" ]"
-assert "chapter 2: node --test is green" sh -c "cd '$TMP/ws-a2' && node --test"
-assert_not "no stand-in left in the workspace" sh -c "find '$TMP/ws-a2' -name stand-in.sh | grep -q ."
-
-t "mode A2, scripted session: off-script answers, unknown commands, a step left and resumed, steps replayed for the learner"
-cat >"$TMP/a2-session.sh" <<EOS
-command -v claude >>"$TMP/a2-which"
-if [ "\$PDSF_TUTO_A2_CHAPTER" = 1 ]; then
-  printf '%s\n' /foo /verify-factory hello /help /build-factory 2 '' 'Our own words' '' '' /build-factory 3 /exit | claude
-  claude /build-factory </dev/null
-  printf '%s\n' /build-factory '' '' '' /build-factory /exit | claude
-else
-  printf '%s\n' /grill-with-docs '' '' /exit | claude
-  printf '%s\n' /to-spec '' '' | claude
-fi
-EOS
-tuto ws-a2-script "$TMP/a2-script.log" PATH="$TMP/bin:$PATH" COLUMNS=110 PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_A2_SESSION="$TMP/a2-session.sh"
-assert "the tutorial exits 0" test $? -eq 0
-L="$TMP/a2-script.log"
-assert "the session ran once per chapter" test "$(grep -c . "$TMP/a2-which")" -eq 2
-assert "in the session, claude is the stand-in" sh -c "grep -v '^$TMP/bin/claude\$' '$TMP/a2-which' | grep -q '/bin/claude\$'"
-assert "the stand-in is gone after the tutorial" sh -c "[ ! -e \"\$(head -n 1 '$TMP/a2-which')\" ]"
-assert "the learner's own claude was never called" test ! -e "$TMP/claude-called"
-assert_out "$L" "simulated session: not recorded — no recording of /foo at this point of the tutorial"
-assert_out "$L" "simulated session: not recorded — /verify-factory is recorded for a later step (1.4): play this one first"
-assert_out "$L" "simulated session: not recorded — the stand-in only replays the recorded commands"
-assert_out "$L" "Available at this step (1.2, Scaffold the factory):"
-assert_out "$L" "claude (simulated stand-in) — what you can type"
-assert "a numbered choice is taken" grep -qF 'you › Jira' "$L"
-assert "free text is taken" grep -qF 'you › Our own words' "$L"
-assert "off-script answers are flagged" test "$(grep -c '⚑ off-script — simulated: a real agent would adapt, the recorded path continues.' "$L")" -eq 3
-assert_out "$L" "The recorded answer was: Keep the local markdown folder business-backlog/"
-assert_out "$L" "session left before the end of the step: nothing applied"
-assert_out "$L" "Step 1.3 is not played yet: type \`claude\` to come back to it"
-assert_out "$L" "> /build-factory"
-assert_out "$L" "simulated session: not recorded — /build-factory was already played (step 1.3)"
-assert_out "$L" "Recorded as: /grill-with-docs business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
-assert_out "$L" "In the recorded run, this command was typed in the same session as the previous step."
-assert_out "$L" "Not played in the session yet:"
-assert_out "$L" "  step 1.4  /verify-factory  — Check the factory's health"
-assert "steps left are replayed for the learner (no terminal)" test "$(grep -c '^Replayed for you, as in mode A1' "$L")" -eq 3
-assert "the summary counts the session's steps, the replayed ones and the off-script answers" sh -c "tr '\n' ' ' <'$L' | grep -qF '8 steps played, every check green; 4 of them in the simulated session, 3 replayed for you, 2 off-script answer(s) (0 tokens).'"
-assert_out "$L" "  01-build-the-factory/02-scaffold turn 3: Jira"
-assert_out "$L" "  01-build-the-factory/02-scaffold turn 7: Our own words"
-assert_not "an abandoned step's answers are not counted" grep -qF '03-context turn' "$L"
-assert "off-script answers change nothing: A1's state" test "$(ws_state "$TMP/ws-a2-script")" = "$(ws_state "$TMP/ws-a1")"
-assert "no check failed" sh -c "! grep -q '✗' '$L'"
-
-t "mode A2: steps left unplayed and PDSF_TUTO_A2_LEFT=q stop the tutorial"
-printf 'true\n' >"$TMP/a2-idle.sh"
-tuto ws-a2-quit "$TMP/a2-quit.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_A2_SESSION="$TMP/a2-idle.sh" PDSF_TUTO_A2_LEFT=q
-assert_not "the tutorial fails" test $? -eq 0
-assert_out "$TMP/a2-quit.log" "stopped with step(s) left unplayed"
-assert "nothing was applied" test ! -e "$TMP/ws-a2-quit/docs/agents"
-
-t "mode A2 with the generic layout, chapters 2 and 3 skipped, PDSF_TUTO_A2_SESSION empty (the recorded path)"
-tuto ws-a2-generic "$TMP/a2-generic.log" PATH="$TMP/bin:$PATH" PDSF_TUTO_HARNESS=generic PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_A2_SESSION=
-assert "the tutorial exits 0" test $? -eq 0
-assert_out "$TMP/a2-generic.log" "4 steps played, every check green; 3 of them in the simulated session, 0 replayed for you"
-assert_out "$TMP/a2-generic.log" "Skipping Chapter 2"
-assert_out "$TMP/a2-generic.log" "Skipping Chapter 3"
-assert "chapter 1's state is reached" sh -c "cd '$TMP/ws-a2-generic' && git show develop:CONTEXT.md | grep -q Belt && [ ! -e CLAUDE.md ]"
-assert "the same state as A1 on that layout" test "$(ws_state "$TMP/ws-a2-generic")" = "$(ws_state "$TMP/ws-a1-generic")"
-assert "no agent was called (zero tokens)" test ! -e "$TMP/claude-called"
-
-t "mode A2 stops on a failing step check"
-SRC=$(fake_src a2-broken)
-cp -R "$REPO/tutorial/modes/." "$SRC/tutorial/modes/"
-rm "$SRC/tutorial/scenario/01-build-the-factory/03-context/recording/files/CONTEXT.md"
-( cd "$TMP" && env PDSF_SRC="$SRC" PDSF_TUTO_DIR=ws-a2-broken PDSF_TUTO_MODE=a2 PDSF_TUTO_SKIP_CH2=y PDSF_TUTO_SKIP_CH3=y PDSF_TUTO_PAUSE=n sh "$SRC/tutorial/tutorial.sh" ) </dev/null >"$TMP/a2-broken.log" 2>&1
-assert_not "the tutorial fails" test $? -eq 0
-assert_out "$TMP/a2-broken.log" "the check of 01-build-the-factory/03-context failed"
-assert_not "it does not report success" grep -q 'Simulated session complete' "$TMP/a2-broken.log"
-
-t "the stand-in only runs inside the tutorial's session"
-( cd "$TMP" && env -u PDSF_TUTO_A2_STATE PDSF_TUTO_ROOT="$REPO/tutorial" PDSF_TUTO_WORKSPACE="$TMP/ws-a2" sh "$REPO/tutorial/modes/a2-simulated-session/stand-in.sh" ) </dev/null >"$TMP/a2-outside.log" 2>&1
-assert_not "it refuses to run without the mode's state" test $? -eq 0
-assert_out "$TMP/a2-outside.log" "the stand-in claude only runs in the tutorial sub-shell"
-assert_not "the tutorial never installs a claude command" sh -c "find '$TMP/ws-a2' '$TMP/ws-a2-script' -name claude -type f | grep -q ."
-
 # ---------------------------------------------------------------------------- recorder
 
 t "the recorder drives an agent turn by turn and writes the recording (fake agent)"
 SRC=$(fake_src recorder)
+REC="$SRC/tutorial/maintainers/record/record.sh"
 cat >"$TMP/bin/fake-agent" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$TMP/fake-agent.calls"
@@ -697,16 +417,19 @@ EOF
 chmod +x "$TMP/bin/fake-agent"
 STEP=01-build-the-factory/04-verify-factory
 R="$SRC/tutorial/scenario/$STEP"
-sh "$SRC/tutorial/record/record.sh" prepare "$STEP" "$TMP/rec-ws" >"$TMP/rec.log" 2>&1
-assert "prepare: a fresh workspace with the earlier steps replayed" sh -c "git -C '$TMP/rec-ws' show develop:CONTEXT.md | grep -q Belt"
-PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$SRC/tutorial/record/record.sh" turn "$TMP/rec-ws" /verify-factory >"$TMP/rec-turn.log" 2>&1
+sh "$REC" steps >"$TMP/rec-steps.log" 2>&1
+assert "steps: lists the recorded steps" test "$(head -n 1 "$TMP/rec-steps.log")" = 01-build-the-factory/02-scaffold
+HOME="$TMP/home" sh "$REC" prepare "$STEP" "$TMP/rec-ws" >"$TMP/rec.log" 2>&1
+assert "prepare: a fresh workspace, installed, with the earlier steps replayed" sh -c "git -C '$TMP/rec-ws' show develop:CONTEXT.md | grep -q Belt && [ -L '$TMP/rec-ws/.claude/skills' ]"
+PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$REC" turn "$TMP/rec-ws" /verify-factory >"$TMP/rec-turn.log" 2>&1
 assert "turn: prints the agent's answer" grep -q 'Fix anything?' "$TMP/rec-turn.log"
-PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$SRC/tutorial/record/record.sh" turn "$TMP/rec-ws" --choices "Yes, fix it | Show me first" "No, thanks." >>"$TMP/rec-turn.log" 2>&1
+PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$REC" turn "$TMP/rec-ws" --choices "Yes, fix it | Show me first" "No, thanks." >>"$TMP/rec-turn.log" 2>&1
 assert "the first turn starts a session" sh -c "head -n 1 '$TMP/fake-agent.calls' | grep -q '^-p /verify-factory --output-format' && ! head -n 1 '$TMP/fake-agent.calls' | grep -q -- --resume"
 assert "the next turn resumes it" sh -c "sed -n 2p '$TMP/fake-agent.calls' | grep -q -- '--resume fake-42'"
-sh "$SRC/tutorial/record/record.sh" finish "$STEP" "$TMP/rec-ws" >>"$TMP/rec.log" 2>&1
+sh "$REC" finish "$STEP" "$TMP/rec-ws" >>"$TMP/rec.log" 2>&1
 assert "finish: the step's check passes on the recorded state" test $? -eq 0
 assert "finish: 4 turns" test "$(rec_turn_count "$R")" -eq 4
+assert "finish: the command and the title are kept" sh -c "[ \"\$(PDSF_TUTO_ROOT='$SRC/tutorial'; . '$SRC/tutorial/lib/scenario.sh'; tuto_meta '$R/recording/transcript.md' command)\" = /verify-factory ] && grep -q '^# Recording — Check the factory' '$R/recording/transcript.md'"
 assert "finish: the learner's answer" test "$(rec_turn_text "$R" 3)" = "No, thanks."
 assert "finish: its alternatives" test "$(rec_turn_choices "$R" 3 | tr '\n' '~')" = "Yes, fix it~Show me first~"
 assert "finish: tool calls shown as run from the workspace" sh -c "grep -qx '⏺ Bash(git status)' '$R/recording/transcript.md'"
@@ -716,8 +439,8 @@ assert "finish: the produced files are in files/" test -f "$R/recording/files/no
 assert "finish: what the agent left is committed, so the next step starts from it" sh -c "[ -z \"\$(git -C '$TMP/rec-ws' status --porcelain)\" ]"
 assert "finish: no workspace path leaks" sh -c "! grep -rqF '$TMP' '$R/recording'"
 : >"$TMP/fake-agent.calls"
-sh "$SRC/tutorial/record/record.sh" prepare "$STEP" "$TMP/rec-ws2" >/dev/null 2>&1
-PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$SRC/tutorial/record/record.sh" run "$STEP" "$TMP/rec-ws2" >"$TMP/rec-run.log" 2>&1
+HOME="$TMP/home" sh "$REC" prepare "$STEP" "$TMP/rec-ws2" >/dev/null 2>&1
+PDSF_RECORD_CLAUDE="$TMP/bin/fake-agent" sh "$REC" run "$STEP" "$TMP/rec-ws2" >"$TMP/rec-run.log" 2>&1
 assert "run: re-records the step from its recorded answers" test $? -eq 0
 assert "run: the agent got the same two learner turns" sh -c "[ \"\$(wc -l < '$TMP/fake-agent.calls' | tr -d ' ')\" -eq 2 ] && sed -n 2p '$TMP/fake-agent.calls' | grep -q '^-p No, thanks\.'"
 assert "run: the alternatives are kept" test "$(rec_turn_choices "$R" 3 | tr '\n' '~')" = "Yes, fix it~Show me first~"
@@ -753,8 +476,15 @@ else
 fi
 assert "docs/INSTALL.md shows the same options" sh -c "grep -qF '[1] .agents ' '$REPO/docs/INSTALL.md' && grep -qF '[2] .agents + .claude symlinks' '$REPO/docs/INSTALL.md'"
 
-t "README links the tutorial"
+# ---------------------------------------------------------------------------- docs
+
+t "the READMEs are up to date"
 assert "README has the tutorial command" grep -qF 'tutorial/tutorial.sh | sh' "$REPO/README.md"
+assert "README mentions PDSF_REF" grep -qF 'PDSF_REF' "$REPO/README.md"
+assert_not "README no longer talks about tutorial modes" grep -qiE 'mode (A1|A2|B)|skill guide|guide skill|tapes /pdsf-tutorial' "$REPO/README.md"
+for _h in "## Scenario format" "## Scripted input" "## Recordings" "PDSF_REF"; do
+  assert "tutorial README: $_h" grep -qF "$_h" "$REPO/tutorial/README.md"
+done
 
 # ---------------------------------------------------------------------------- summary
 

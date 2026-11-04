@@ -6,29 +6,35 @@
 # then stores the step's recording: transcript.md + files/ (format: tutorial/README.md
 # § Recordings). It spends tokens.
 #
-#   sh tutorial/record/record.sh prepare STEP WS     fresh workspace WS, in the state just before STEP
-#                                                    (setup run for real, earlier steps replayed)
-#   sh tutorial/record/record.sh turn WS [--continue] [--choices "A | B"] MESSAGE
+#   sh tutorial/maintainers/record/record.sh prepare STEP WS
+#                                                    fresh workspace WS, in the state just before STEP
+#                                                    (setup + install run for real, earlier steps
+#                                                    replayed)
+#   sh tutorial/maintainers/record/record.sh turn WS [--continue] [--choices "A | B"] MESSAGE
 #                                                    one learner turn (the first one: the command),
 #                                                    sent to the real agent; prints its answer.
 #                                                    --continue (first turn only): stay in the
 #                                                    previous step's agent session, as a learner
 #                                                    typing the next command in the same session
-#   sh tutorial/record/record.sh finish STEP WS      writes STEP's recording from the session, commits
+#   sh tutorial/maintainers/record/record.sh finish STEP WS
+#                                                    writes STEP's recording from the session, commits
 #                                                    what the agent left, runs the step's check
-#   sh tutorial/record/record.sh run STEP WS         re-plays STEP's recorded learner turns against
+#   sh tutorial/maintainers/record/record.sh run STEP WS
+#                                                    re-plays STEP's recorded learner turns against
 #                                                    the real agent, then `finish` (WS prepared)
-#   sh tutorial/record/record.sh all WS              prepare + `run` of every agent step, in order
-#   sh tutorial/record/record.sh steps               lists the agent steps (STEP ids)
+#   sh tutorial/maintainers/record/record.sh all WS  prepare + `run` of every recorded step, in order
+#   sh tutorial/maintainers/record/record.sh steps   lists the recorded steps (STEP ids)
 #
-# STEP is a step id, e.g. 01-build-the-factory/02-scaffold. Environment:
+# STEP is a step folder id under tutorial/scenario/, e.g. 01-build-the-factory/02-scaffold (it holds
+# the step's check.sh; scenario.json points at it with `dir`). After a re-recording, check that the
+# condensed `play` of that step in scenario.json still says what the new transcript says (the
+# scenario linter checks that each question still points at a recorded answer). Environment:
 #   PDSF_RECORD_CLAUDE   the agent command (default: claude)
 #   PDSF_RECORD_MODEL    passed as --model (default: the CLI's default model)
-#   PDSF_RECORD_HARNESS  the workspace's harness layout (default: claude — the CLI needs .claude/)
 set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd -P)
-REPO=$(cd "$HERE/../.." && pwd -P)
+REPO=$(cd "$HERE/../../.." && pwd -P)
 PDSF_TUTO_ROOT="$REPO/tutorial"
 PDSF_TUTO_SRC=$REPO
 export PDSF_TUTO_ROOT PDSF_TUTO_SRC
@@ -36,27 +42,37 @@ export PDSF_TUTO_ROOT PDSF_TUTO_SRC
 . "$PDSF_TUTO_ROOT/lib/recording.sh"
 
 CLAUDE_CMD=${PDSF_RECORD_CLAUDE:-claude}
-HARNESS=${PDSF_RECORD_HARNESS:-claude}
+HARNESS=claude   # the tutorial installs the .agents + .claude symlinks layout
 
 die() { printf '%s\n' "record: error: $*" >&2; exit 1; }
 log() { printf '%s\n' "record: $*" >&2; }
 
 usage() { sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; }
 
-# step_dir STEP_ID -> the step directory (dies when it is not an agent step).
+# step_dir STEP_ID -> the step directory (dies when it has no check.sh).
 step_dir() {
   _sd="$PDSF_TUTO_SCENARIO/$1"
-  [ -f "$_sd/step.md" ] || die "no step '$1' (see: record.sh steps)"
-  [ "$(tuto_step_kind "$_sd")" = agent ] || die "'$1' is not an agent step: nothing to record"
+  [ -f "$_sd/check.sh" ] || die "no step '$1' with a check.sh under tutorial/scenario/ (see: record.sh steps)"
   printf '%s' "${_sd%/}"
 }
 
-agent_steps() {
-  for _c in $(tuto_chapters); do
-    for _s in $(tuto_steps "$_c"); do
-      [ "$(tuto_step_kind "$_s")" = agent ] && printf '%s\n' "$_s"
-    done
-  done
+agent_steps() { tuto_recorded_steps; }
+
+# step_command STEP_DIR -> the command the recording starts with (its `command:`, else the first
+# learner turn of the session being recorded).
+step_command() {
+  _cmd=""
+  tuto_has_recording "$1" && _cmd=$(rec_meta "$1" command)
+  [ -n "$_cmd" ] || { [ -n "${STATE:-}" ] && [ -f "$STATE/001-learner.turn" ] && _cmd=$(head -n 1 "$STATE/001-learner.turn"); }
+  printf '%s' "$_cmd"
+}
+
+# step_title STEP_DIR -> the recording's title (from its heading), else the folder's slug.
+step_title() {
+  _t=""
+  tuto_has_recording "$1" && _t=$(sed -n 's/^# Recording — \(.*\) (`.*`)$/\1/p' "$(rec_transcript "$1")" | head -n 1)
+  [ -n "$_t" ] || { _t=${1##*/}; _t=${_t#*-}; }
+  printf '%s' "$_t"
 }
 
 use_ws() {
@@ -75,20 +91,25 @@ cmd_prepare() {
   _target=$(step_dir "$1"); _ws=$2
   [ ! -e "$_ws" ] || [ -z "$(ls -A "$_ws" 2>/dev/null)" ] || die "$_ws is not empty"
   mkdir -p "$_ws" && _ws=$(cd "$_ws" && pwd -P)
-  log "setting up $_ws with tutorial.sh (harness: $HARNESS)…"
-  ( cd "$(dirname "$_ws")" && env PDSF_SRC="$REPO" PDSF_TUTO_DIR="$_ws" PDSF_TUTO_HARNESS="$HARNESS" \
-      PDSF_TUTO_MODE= PDSF_TUTO_PAUSE=n sh "$PDSF_TUTO_ROOT/tutorial.sh" ) </dev/null >/dev/null 2>&1 \
+  log "setting up $_ws with tutorial.sh, then the real install…"
+  ( cd "$(dirname "$_ws")" && env PDSF_SRC="$REPO" PDSF_TUTO_DIR="$_ws" PDSF_TUTO_SETUP_ONLY=y \
+      sh "$PDSF_TUTO_ROOT/tutorial.sh" ) </dev/null >/dev/null 2>&1 \
     || die "tutorial.sh failed to set up $_ws"
   use_ws "$_ws"
+  _install="$PDSF_TUTO_SCENARIO/01-build-the-factory/01-install"
+  tuto_run_action "$_install" >/dev/null 2>&1 || die "the install failed in $_ws"
+  tuto_run_check "$_install" >/dev/null || die "the install check fails in $_ws"
   for _s in $(agent_steps); do
-    [ "$_s" = "$_target" ] && break
-    tuto_has_recording "$_s" || die "$(tuto_step_id "$_s") has no recording to replay: record it first"
+    # Steps are replayed in folder order, up to the target (which may not be recorded yet).
+    _first=$(printf '%s\n%s\n' "$_s" "$_target" | LC_ALL=C sort | head -n 1)
+    [ "$_s" = "$_target" ] || [ "$_first" = "$_target" ] && break
     log "replaying $(tuto_step_id "$_s")…"
     rec_apply "$_s" || die "replaying $(tuto_step_id "$_s") failed"
     tuto_run_check "$_s" >/dev/null || die "$(tuto_step_id "$_s")'s check fails after its replay"
   done
   log "ready: $_ws is in the state just before $(tuto_step_id "$_target")."
-  log "next: record.sh turn $_ws \"$(tuto_step_command "$_target")\""
+  _next=$(step_command "$_target")
+  log "next: record.sh turn $_ws \"${_next:-/<command>}\""
 }
 
 # ---------------------------------------------------------------------------- turn
@@ -159,14 +180,15 @@ cmd_turn() {
 cmd_finish() {
   [ $# -eq 2 ] || die "usage: record.sh finish STEP WS"
   _step=$(step_dir "$1"); use_ws "$2"
-  [ -f "$STATE/start" ] || die "no recorded session in $2 (run: record.sh turn $2 \"$(tuto_step_command "$_step")\")"
+  [ -f "$STATE/start" ] || die "no recorded session in $2 (run: record.sh turn $2 \"/<command>\")"
   _start=$(cat "$STATE/start")
   _rec="$_step/recording"
 
   # What the agent committed itself names the replayed commit; what it left uncommitted is committed
   # here, so the next step (recorded or replayed) starts from the same state.
   _msg=$(rec_git log --no-merges -1 --format=%s "$_start..HEAD" 2>/dev/null)
-  [ -n "$_msg" ] || _msg="$(tuto_step_command "$_step"): $(tuto_step_title "$_step")"
+  _command=$(step_command "$_step"); _title=$(step_title "$_step")
+  [ -n "$_msg" ] || _msg="$_command: $_title"
   if [ -n "$(rec_git status --porcelain)" ]; then
     rec_git add -A && rec_git commit -q -m "$_msg" || die "committing what the agent left failed"
   fi
@@ -207,7 +229,7 @@ cmd_finish() {
   {
     printf -- '---\n'
     printf 'step: %s\n' "$(tuto_step_id "$_step")"
-    printf 'command: %s\n' "$(tuto_step_command "$_step")"
+    printf 'command: %s\n' "$_command"
     printf 'branch: %s\n' "$_branch"
     printf 'commit: %s\n' "$_msg"
     if [ -f "$STATE/continued" ]; then printf 'session: continued\n'; else printf 'session: new\n'; fi
@@ -221,10 +243,10 @@ cmd_finish() {
     printf 'harness: %s\n' "$HARNESS"
     printf 'format: 1\n'
     printf -- '---\n\n'
-    printf '# Recording — %s (`%s`)\n\n' "$(tuto_step_title "$_step")" "$(tuto_step_command "$_step")"
+    printf '# Recording — %s (`%s`)\n\n' "$_title" "$_command"
     printf 'A real run of the PDSF skill on a fresh blackbelt-lite tutorial workspace, recorded with\n'
-    printf '`tutorial/record/record.sh`. The files it produced are in `files/`. Format and re-recording\n'
-    printf 'procedure: `tutorial/README.md` § Recordings.\n'
+    printf '`tutorial/maintainers/record/record.sh`. The files it produced are in `files/`. Format and\n'
+    printf 're-recording procedure: `tutorial/README.md` § Recordings.\n'
     for _t in "$STATE"/*.turn; do
       case "$_t" in
         *-learner.turn)

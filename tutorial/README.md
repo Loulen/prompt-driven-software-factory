@@ -1,190 +1,232 @@
 # PDSF Tutorial
 
-Discover PDSF and build your first factory, step by step, on a throwaway **tutorial workspace**
-seeded from the **tutorial fixture** `blackbelt-lite`. The tutorial ships with PDSF but is not a
-skill: `install.sh` never installs any of it into a project (ADR-0006).
+Build your first agentic software factory in **about 10 minutes, with zero tokens**, on a small,
+realistic Node project: Blackbelt (lite). One command, one path, in your terminal:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh | sh
 ```
 
-Offline, from a local checkout (run it from the directory that will hold the workspace, outside
-the checkout):
+You type the **real** commands: `curl … install.sh | sh` runs the real installer, and the files and
+git commits are real. The **agent is simulated**: typing `claude` opens a Claude Code look-alike
+inside the tutorial, which replays recordings of real runs of the PDSF skills. Your own `claude` is
+never launched, and no token is spent. A **coach** at the bottom of the screen tells you what to do,
+in two lines at most.
+
+Needs `sh`, `git` and **Node 18+**, nothing else (no `npm install`). Works on macOS, Linux and
+Windows with WSL. Git Bash is best effort: symlinks become copies, and the arrow keys may need
+`winpty`.
+
+- **Ctrl-C** quits at any time. Run the same command again to **resume** where you stopped.
+- The workspace stays in `~/pdsf-tutorial/blackbelt`: a git repo you can open in your IDE (`code .`
+  is one of the steps), explore and delete.
+- At the end, press `r` to start over with a fresh workspace.
+
+The tutorial ships with PDSF but is not a skill: `install.sh` never installs any of it into a
+project (ADR-0006).
+
+## The journey
+
+| # | Kind | You type | What happens |
+|---|---|---|---|
+| | read | | Intro card: 3 milestones, ~10 min, 0 token, the agent is SIMULATED |
+| 1 | do | `curl -fsSL …/install.sh \| sh` | The real installer runs in the workspace (`.agents/skills` + `.claude` symlinks, no question) and the install is committed |
+| 2 | do | `code .` (`s` skips it) | Your IDE opens on the workspace: keep the file tree and the git graph in view |
+| 3 | do | `claude` | The screen switches to the simulated harness |
+| 4 | do | `/help` | The PDSF skills, `/build-factory` first |
+| 5 | do | `/build-factory` | Scaffold pass: 2 questions (↑ ↓ Enter, the recorded answer preselected), the ports written and committed, shown as a diffstat |
+| 6 | read | | *Why twice?* One session per pass: a short context means a focused agent, so fewer hallucinations |
+| 7 | do | `/clear` | A fresh session. Files and commits stay |
+| 8 | do | `/build-factory` | Context pass: `CONTEXT.md` (glossary) and 3 founding ADRs |
+| 9 | do | `/verify-factory` | Everything green 🎉 |
+| | read | | End card: what to type tomorrow on your project, and links |
+
+Every step is either **do** (type the command shown as ghost text: **Tab** fills it in) or **read**
+(press Enter). In the shell, `ls`, `cat` and `git log` really run. Anything off-script gets a
+one-line hint in yellow, never a dead end. `?` gives a hint, and a second `?` lets the tutorial do
+the step for you. While the agent works, any key fast-forwards to its next question.
+
+A bonus chapter ("your first feature", from `/grill-with-docs` to `/implement`) is coming (#22).
+Its recordings are already under `scenario/02-use-the-factory/`.
+
+## Entry script (`tutorial.sh`)
 
 ```sh
+# a branch under review (recette), exactly as a learner would run it:
+curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/<branch>/tutorial/tutorial.sh | PDSF_REF=<branch> sh
+# offline, from a local checkout (run it from outside the checkout):
 PDSF_SRC=/path/to/pdsf sh /path/to/pdsf/tutorial/tutorial.sh
 ```
 
-Needs `sh`, `git`, and Node 18+ (the fixture's tests run with plain `node --test`, no `npm install`).
+1. **Resolves a PDSF source**: `PDSF_SRC`, else `git clone --depth 1 --branch $PDSF_REF` into a temp
+   dir, else the tarball of that branch (removed at exit). It never writes into that source.
+2. **Prepares the workspace**: `~/pdsf-tutorial/blackbelt` by default. A tutorial workspace that is
+   already there is **resumed**. Any other non-empty directory is refused, and so is any directory
+   inside the PDSF source. A fresh one gets the fixture, then `git init`, an initial commit on
+   `main`, and a `develop` branch checked out (PDSF's git flow starts from `develop`). The marker
+   `.git/pdsf-tutorial` makes it a tutorial workspace.
+3. **Runs the tutorial app** (`node app/tuto.mjs`) on the terminal (`/dev/tty`, so `curl … | sh`
+   stays interactive). When the learner asks to start over (`r`, exit status 75), it removes the
+   workspace, creates it again and runs the app again.
 
-## What it does
+| Variable | Meaning | Default |
+| --- | --- | --- |
+| `PDSF_REF` | Branch of PDSF to fetch. Ignored with `PDSF_SRC`. | `main` |
+| `PDSF_SRC` | Local PDSF checkout to play the tutorial from (offline). | fetched |
+| `PDSF_TUTO_DIR` | Workspace directory: absent, empty, or a tutorial workspace to resume; outside the source. | `~/pdsf-tutorial/blackbelt` |
+| `PDSF_TUTO_SCRIPT` | Play without a keyboard: `auto` (the recorded path) or a file (§ Scripted input). | the keyboard |
+| `PDSF_REPO`, `PDSF_TARBALL` | Override the clone and tarball URLs. | GitHub |
+| `PDSF_TUTO_SETUP_ONLY` | `y`: stop after preparing the workspace (maintainers, the recorder). | |
 
-1. **Resolves a PDSF source**: `PDSF_SRC`, else `git clone --depth 1` into a temp dir, else the
-   tarball (removed at exit). It never writes into that source.
-2. **Creates the workspace**: default `./pdsf-tutorial-workspace`. It refuses a non-empty directory
-   and any directory inside the PDSF source. It copies the fixture, then `git init` + an initial
-   commit on `main`.
-3. **Explains the harness layout and asks for it**: `[1] .agents` (generic) or
-   `[2] .agents + .claude symlinks` (default). Then it runs the real `install.sh` from the resolved
-   source, commits the install, creates `develop` and checks it out. Then it runs the install
-   step's check.
-4. **Offers the tutorial modes**: only the ones actually shipped under `modes/`. With none shipped,
-   it says so and exits cleanly (status 0) after the setup. Shipped: **A1, narrated replay**
-   (`modes/a1-narrated-replay/`, zero tokens: agent steps replayed from a recorded real run,
-   flagged `SIMULATED`), **A2, simulated session** (`modes/a2-simulated-session/`, zero tokens:
-   the learner types `claude` and the real commands in a sub-shell where a stand-in `claude`
-   replays the same recordings) and **B, real agent** (`modes/b-real-agent/`, spends tokens).
-5. Plays the chosen mode, then ends on **where to look next**.
+The app also reads `PDSF_TUTO_FAST=1` (no streaming animation), `PDSF_TUTO_NO_IDE=1` (never launch
+an IDE), and `PDSF_TUTO_FRAMES=<file>` with `PDSF_TUTO_COLS` / `PDSF_TUTO_ROWS` (append every
+rendered screen to a file, at that size: the tests check widths and the coach on every screen).
 
-Three chapters:
-
-1. **Build the factory**: install, `/build-factory` scaffold (local markdown tracker for both
-   backlogs), `/build-factory` context, `/verify-factory`.
-2. **Use the factory** (skippable): `Belt US-1 [user] Submit my belt for sensei validation` through
-   `/grill-with-docs` → `/to-spec` → `/to-tickets` → `/implement` of one ticket.
-3. **Go further** (skippable): README and `docs/INSTALL.md`, `/verify-factory` as the "what's next"
-   oracle, `/clean-context`, plugging PDO. PDSF and PDO are independent.
+Exit status: `0` done, `130` quit with Ctrl-C (progress saved), `1` an error such as a failing step
+check (the workspace is left intact), `3` the scripted input ran out.
 
 ## Layout
 
 ```
 tutorial/
-├── tutorial.sh                 ← the entry script (curl … | sh)
+├── tutorial.sh                 ← entry script (curl … | sh)
+├── app/
+│   ├── tuto.mjs                ← the tutorial app: tutorial shell, simulated harness, coach
+│   ├── ui.mjs                  ← terminal UI: display widths, wrap/fit, palette, components
+│   ├── keys.mjs                ← keyboard and scripted input
+│   └── scenario.mjs            ← scenario loader and linter (`node app/scenario.mjs lint`)
+├── scenario/
+│   ├── scenario.json           ← THE scenario: chapters, do/read steps, coach texts (format below)
+│   ├── 01-build-the-factory/   ← one folder per step that touches the workspace:
+│   │   ├── 01-install/         ←   action.sh (runs for real) + check.sh
+│   │   └── 02-scaffold/ …      ←   check.sh + recording/ (transcript.md + files/)
+│   └── 02-use-the-factory/     ← the bonus chapter's recordings (#22)
 ├── lib/
-│   ├── scenario.sh             ← scenario + modes library, sourced by tutorial.sh and every mode
-│   ├── recording.sh            ← reads and replays the recordings (simulated modes, recorder)
-│   ├── replay.sh               ← what the simulated modes show: step text, SIMULATED frame, git changes
-│   └── check.sh                ← helpers for step checks
-├── fixture/blackbelt-lite/     ← copied verbatim into the workspace
-├── scenario/                   ← the lesson plan every mode plays, with its recordings (contract below)
-├── modes/                      ← one folder per shipped tutorial mode (contract below)
-│   ├── a1-narrated-replay/     ← mode A1: narrated replay
-│   ├── a2-simulated-session/   ← mode A2: simulated session (its stand-in claude: stand-in.sh)
-│   └── b-real-agent/           ← mode B: real agent (its guide skill: pdsf-tutorial/)
-├── record/                     ← the recorder: (re-)records the agent steps from a real run
-└── test/run.sh                 ← the test suite
+│   ├── scenario.sh             ← shell helpers: frontmatter, step ids, run a check or an action
+│   ├── recording.sh            ← read a recording, replay it onto the workspace (rec_apply)
+│   └── check.sh                ← helpers for step checks (✓ / ✗ lines)
+├── maintainers/
+│   └── record/                 ← the recorder: re-records the recordings from real runs (tokens)
+├── fixture/blackbelt-lite/     ← the tutorial fixture (its tests: node --test)
+└── test/                       ← sh tutorial/test/run.sh
 ```
 
-## Environment (`PDSF_TUTO_*`)
+## The app (`app/tuto.mjs`)
 
-Same rule as `install.sh`: a **set** variable answers its question without prompting, **even when
-empty**. An **unset** one is asked on `/dev/tty` (so `curl … | sh` stays interactive). With no tty,
-the default is used. A fully non-interactive run sets them all.
+One Node 18 program, zero npm dependency, raw ANSI, full screen (the alternate screen: your
+terminal comes back as it was). It has three parts:
 
-| Variable | Meaning | Default |
-| --- | --- | --- |
-| `PDSF_TUTO_DIR` | Workspace directory (absent or empty, outside the PDSF source). | `./pdsf-tutorial-workspace` |
-| `PDSF_TUTO_HARNESS` | Harness layout: `claude` / `2` (`.agents` + `.claude` symlinks) or `generic` / `1` (`.agents`). Passed to `install.sh` as `PDSF_HARNESS`; **modes receive it normalised** to `claude` or `generic`. | `claude` |
-| `PDSF_TUTO_MODE` | Mode to play: its menu number, its id (`a1`) or its folder name (`a1-narrated-replay`). **Empty: stop after the setup.** Modes receive the resolved id. | first shipped mode |
-| `PDSF_TUTO_SKIP_CH2` | `y` to skip chapter 2. Asked only when a mode is played; modes receive `y` or `n`. | `n` |
-| `PDSF_TUTO_SKIP_CH3` | `y` to skip chapter 3. Same as above. | `n` |
-| `PDSF_TUTO_PAUSE` | `n`: never wait for Enter between steps (`tuto_pause`). | `y` |
-| `PDSF_SRC` | Local PDSF checkout to play from: fully offline. | (fetch) |
-| `PDSF_REPO`, `PDSF_TARBALL` | Override the clone / tarball URLs. | public repo |
+- **Tutorial shell**: a prompt `blackbelt (develop) $` where the deterministic commands run for
+  real: the step's expected command, and read-only ones (`ls`, `cat`, `head`, `git log/status/diff/show`,
+  `node --test`…). Anything else gets a one-line hint.
+- **Simulated harness**: a Claude Code look-alike with a `✻ Claude Code SIMULATED` header, an input
+  box, `/help`, `/clear`, `/exit`, tool-call lines (`⏺`), choice lists (`❯`) and diffstats. Free
+  text or another slash command gets a "(simulated)" reply. Tabs at the top right show which
+  screen you are on.
+- **Coach**: the band at the bottom. A rule with the progress dots (`●●●◉○○○○○ 4/9`), at most two
+  lines of text, one call to action (the only highlighted element). Cyan while you have something
+  to do, green ✓ with numbers once a step is done, yellow for off-script input, red if a check fails.
 
-Set by the entry script for steps and modes (not for the learner to set):
+For an agent step, the app streams the step's condensed **play** (about 3 seconds; any key
+fast-forwards), stops on each question with the recorded answer preselected (another answer is
+accepted and flagged; the replay stays on the recorded path), then **applies the recording** with
+`rec_apply` (the recorded files are written and committed for real), shows the writes and the
+commit from real git, and runs the step's **check**.
 
-| Variable | Value |
-| --- | --- |
-| `PDSF_TUTO_SRC` | The resolved PDSF source (its `install.sh`, `skills/`, `tutorial/`). |
-| `PDSF_TUTO_ROOT` | `$PDSF_TUTO_SRC/tutorial`. |
-| `PDSF_TUTO_WORKSPACE` | The workspace, absolute path. |
+Progress is saved in `.git/pdsf-tutorial.json` (outside the work tree) after every step.
 
-A mode that needs more answers adds its own `PDSF_TUTO_*` variable under the same set/unset rule
-and documents it in its `mode.md` (e.g. the simulated session's `PDSF_TUTO_A2_SESSION`, a script that
-types for the learner, and `PDSF_TUTO_A2_LEFT`).
+Rendering never draws a line wider than the terminal: every line goes through `fit` (cut with `…`)
+or `wrap` (broken at spaces, hanging indent, long words cut). Both count display columns: wide emoji
+count 2. The iteration-1 fixes are kept that way.
 
-## Scenario contract
+## Scenario format
 
-The scenario is **data**, shared by every mode: one directory per step, ordered, grouped into
-chapters. Ordering is the `NN-` prefix.
+`scenario/scenario.json`, **format 2**. The terminal app reads it; any other surface (a web
+playground) can read the same file. `node app/scenario.mjs lint` checks it, and the test suite runs
+that check.
 
-```
-scenario/
-└── 01-build-the-factory/       ← chapter: NN-<slug>/
-    ├── chapter.md              ← frontmatter: title, skippable (true|false); body: chapter intro
-    └── 02-scaffold/            ← step: NN-<slug>/
-        ├── step.md             ← learner text (required)
-        ├── action.sh           ← deterministic action (optional)
-        ├── check.sh            ← check of the expected workspace state (required)
-        └── recording/          ← recording slot (agent steps; see below)
-```
-
-A step is identified by `<chapter>/<step>`, e.g. `01-build-the-factory/02-scaffold`.
-
-### `step.md`
-
-```markdown
----
-title: Scaffold the factory
-kind: agent
-command: /build-factory
----
-
-## What you do
-
-…what the learner types and answers…
-
-## Under the hood
-
-…what the skill reads and writes, and why; where a real project differs…
+```jsonc
+{
+  "format": 2,
+  "intro": { "card": {…}, "coach": ["…"], "cta": "Enter ↵ start" },
+  "chapters": [
+    { "id": "factory", "title": "Build the factory",
+      "card": {…},            // optional: a chapter card (Enter plays, `s` skips the chapter)
+      "label": "bonus",       // optional: shown before the progress dots
+      "steps": [ … ] }
+  ],
+  "end": { "card": {…}, "coach": ["…"], "cta": "q quit  ·  r restart" },
+  "texts": { … }              // the app's own words: asking, almost, stuck, resumed…
+}
 ```
 
-- `title`: one line.
-- `kind`: what kind of work the step is.
-  - `setup`: run **for real** by `tutorial.sh` before the mode menu (the install). Modes narrate it
-    and may re-run its check; they never redo it.
-  - `agent`: the work of a PDSF skill. In a simulated mode it is **replayed from a recording**, and
-    always flagged as simulated to the learner. In the real-agent mode, the real skill does it.
-  - `reading`: explanation only, no agent work. It may still have a deterministic action.
-- `command`: what the learner types (the slash command, or the shell command for `setup`).
-  Required for `agent` steps; optional otherwise.
-- `## What you do` and `## Under the hood`: both required, plain English markdown, read verbatim
-  by every mode (`tuto_section`).
-
-### `action.sh` (optional)
-
-A **deterministic** action that always runs for real, never simulated (e.g. the install, or
-showing the seed story). Run as `sh action.sh` with the workspace as cwd and the `PDSF_TUTO_*`
-environment above. Its output is shown to the learner. Non-zero = the action failed.
-
-### `check.sh` (required)
-
-Checks that the workspace reached the step's expected state, by observing files, git and the
-fixture's tests, never by trusting a mode. Run as `sh check.sh` with the workspace as cwd and the
-`PDSF_TUTO_*` environment. It sources `"$PDSF_TUTO_ROOT/lib/check.sh"`, prints one `✓` / `✗` line
-per expectation, and ends with `check_done`: **exit 0 = the step succeeded**. The commands given
-to `check_that` run with no terminal (stdin `/dev/null`, output discarded), so they cannot write
-into the learner's screen. Every mode runs it
-after the step. A simulated step must leave the workspace in a state that passes it, exactly like
-the real skill would.
-
-Checks of `agent` steps fail on a workspace where the agent has not run yet. That is how the test
-suite proves they actually check something.
-
-### Recordings (`recording/`)
-
-Every `agent` step has a `recording/` folder: the recording of a **real run** of the skill on a
-fresh tutorial workspace (ADR-0006: never improvised output). The simulated modes replay it.
-`tuto_has_recording STEP` is true once `transcript.md` exists.
-
-```
-recording/
-├── transcript.md     ← the recorded session: metadata + every turn, learner and agent
-└── files/            ← the files the run created or changed, as a tree applied verbatim
-```
-
-#### `transcript.md` (format 1)
-
-Readable as plain markdown, and parsed by `lib/recording.sh` (`rec_*`). The frontmatter:
+A **step**:
 
 | Key | Meaning |
 | --- | --- |
-| `step` | The step id, `<chapter>/<step>`. |
-| `command` | The step's `command`, as in its `step.md`. |
+| `id` | Unique id (`install`, `scaffold`…). |
+| `kind` | `do` (the learner types something) or `read` (the learner reads, then presses Enter). |
+| `screen` | `shell` or `harness`: where the step happens. |
+| `expect` | *do* only, required: the expected input, shown as ghost text (Tab fills it in). |
+| `accept` | Optional regex: other inputs that count (e.g. any `curl … install.sh \| sh`). |
+| `name` | Optional: how the coach names the input when `expect` is too long ("the install command"). |
+| `skip` | Optional: an input that skips the step (`s` for `code .`), ending on `skipped`. |
+| `coach` | 1–2 lines, each ≤ 74 columns: what to do, then optionally why. `{ws}`, `{skills}`, `{files}`, `{adrs}`, `{commits}`, `{ide}` are filled in. |
+| `cta` | The call to action ("Type /build-factory", "Enter ↵ got it"). Required on every step. |
+| `hint` | *do*: the one line `?` shows. |
+| `done` | *do*: 1–2 lines once the step is done (green ✓), with numbers. |
+| `dir` | Optional: the step folder under `scenario/` holding its `check.sh` (always run), its `action.sh` (run for real; `@var name=value` output lines feed the coach) and its `recording/`. |
+| `effect` | Optional, built into the app: `harness` (enter the harness), `shell` (leave it), `help`, `clear`, `ide`. |
+| `help`, `also` | For the `help` effect: the skills to show with a description, then the ones to name. |
+| `play` | Optional: the condensed replay of the step's recording (below). |
+| `tip` | *read*: a box in the scrollback (the "why twice?" context gauge). |
+
+A **play** is a list of items: `{"tool": "Bash(…)"}`, `{"say": "text"}` (`# ` for a heading; slash
+commands are coloured), `{"ask": "question", "choices": [...], "pick": 0, "turn": 3}`,
+`{"writes": [{"path", "note"}], "stat": true, "more": "ADRs"}` (after the recording is applied,
+from real git), `{"commit": true}`, `{"checks": [...], "na": "…"}`. A question's `turn` is the
+learner turn of the transcript it condenses: the linter checks that this turn is a recorded answer
+with alternatives. The tutorial shows a short, faithful excerpt of the real run; the full run is in
+the transcript.
+
+The **linter** enforces: valid kinds and screens; every coach text 1–2 lines that fit an
+80-column terminal; every *do* step has an expected input (matching its `accept`), a hint and a
+`done`; every step has a call to action; every `dir` has a `check.sh`; every played step has a
+recording, and every question points at a recorded answer.
+
+## Scripted input
+
+`PDSF_TUTO_SCRIPT=auto` plays the recorded path: Tab and Enter on every *do* step, the recorded
+answer to every question, `q` on the end card. `PDSF_TUTO_SCRIPT=<file>` reads the keys from a file,
+one item per line:
+
+```
+# a comment
+ls                  ← typed, then Enter
+{enter}             ← one key: enter, tab, up, down, left, right, backspace, esc, ctrl-c
+{?}                 ← one character key ({s}, {q}, {r}…)
+{auto}              ← from here on, the recorded path
+```
+
+When the file runs out (without `{auto}`), the app stops with status 3. With a scripted input, the
+app writes a plain transcript to stdout (screens, coach changes, `check <step>: … all pass`) instead
+of drawing the screen. This is how `tutorial/test/run.sh` plays the whole journey.
+
+## Recordings
+
+Each agent step's folder holds `recording/transcript.md` (a real session, turn by turn) and
+`recording/files/` (the files that run produced, as workspace-relative paths). The app applies
+`files/` with `rec_apply` and commits, so the workspace ends exactly where the real run left it.
+
+The transcript starts with a frontmatter:
+
+| Key | Meaning |
+| --- | --- |
+| `step` | The step folder id, `<chapter>/<step>`. |
+| `command` | The command the session starts with (the step's `expect`). |
 | `branch` | The branch the run ended on. The replay switches to it, creating it from `HEAD` if absent. |
 | `commit` | The message of the replayed commit: the last commit the agent made (else the recorder's). |
-| `session` | `new`, or `continued`: the step ran in the **previous step's agent session** (the learner typed the next command in the same session, e.g. `/to-spec` right after the grilling). |
+| `session` | `new`, or `continued`: the step ran in the **previous step's agent session**. |
 | `via` | Optional. A branch the run created, committed on, then merged into `branch` (e.g. `/implement`'s `feature/*`). The replay commits there and merges it back `--no-ff`. |
 | `merge` | The message of that merge commit. |
 | `branches` | Other branches the run created (space-separated); the replay creates them at the end. |
@@ -192,8 +234,7 @@ Readable as plain markdown, and parsed by `lib/recording.sh` (`rec_*`). The fron
 | `recorded`, `recorder`, `pdsf`, `harness` | When, with which agent (`Claude Code <version>, <model>`), from which PDSF commit, on which harness layout. |
 | `format` | `1`. |
 
-Then a short header, then the **turns**, in order. Each turn starts with a marker line, then a
-cosmetic heading:
+Then a short header, then the **turns**, in order, each starting with a marker line:
 
 ```markdown
 <!-- pdsf-turn: learner -->
@@ -215,212 +256,71 @@ Here's what's in the repo now: … **Where does your business backlog live?**
 Keep the local markdown folder business-backlog/: one story per file, that's our business backlog.
 ```
 
-- Turns alternate, the **learner first** (the command as typed, possibly with an argument, e.g.
-  `/grill-with-docs business-backlog/BELT-US-1-….md`) and the **agent last**.
+- Turns alternate, the **learner first** (the command as typed) and the **agent last**.
 - A **learner turn** is the recorded answer. Its optional `pdsf-choices` line holds the
-  **alternative** answers to that question (`|`-separated), not including the recorded one: the
-  simulated session (A2) offers them as numbered choices, the recorded answer being the default.
-- An **agent turn** is what the learner would see in their harness: the agent's text, and one
-  `⏺ Tool(target)` line per tool call, in order. Subagent traffic is left out. Paths are relative
-  to the workspace.
-- A turn's text is everything up to the next marker (`rec_turn_text`), so the agent's own `###`
-  headings are safe. `rec_turn_count`, `rec_turn_role`, `rec_turn_choices` read the rest.
+  **alternative** answers (`|`-separated): the scenario's questions offer them.
+- An **agent turn** is what the learner would see in their harness: the agent's text and one
+  `⏺ Tool(target)` line per tool call. Subagent traffic is left out. Paths are relative to the
+  workspace.
 
-#### The replay (`rec_apply`)
+`rec_apply STEP` (in `lib/recording.sh`) switches to `branch` (and `via`), copies `files/` over the
+workspace, deletes `removed`, commits with `commit`, merges `via` back and creates `branches`. The
+step's check then judges the result.
 
-`rec_apply STEP` puts the workspace in the state the real run left it in: it switches to `branch`
-(and to `via`, if any), copies `files/` over the workspace, deletes `removed`, commits those paths
-with `commit`, merges `via` back, and creates `branches`. Each step's check then judges the result.
-The real run's own commits are squashed into one per step (plus the merge).
+### Re-recording (maintainers)
 
-Recordings are made on the `claude` harness layout (the recording agent is Claude Code). Replayed
-on a generic workspace, the only trace is one mention of `.claude/skills/` in the replayed
-`AGENTS.md`.
+**A skill changed? Re-record** the recordings with `tutorial/maintainers/record/record.sh`, then
+run `sh tutorial/test/run.sh`.
 
-#### Re-recording (maintainers)
-
-The recordings drift when the skills change. `sh tutorial/test/run.sh` replays them all and runs
-every step check: the drift guard. To regenerate them, use the recorder, `tutorial/record/record.sh`.
-It spends tokens. It drives a real, non-interactive Claude Code session in a tutorial workspace:
-one `claude -p` call per learner turn, `--resume` in between, `--permission-mode
-bypassPermissions` (the workspace is a throwaway). Needs `claude`, logged in, and `node`.
+The test suite replays every recording and runs every step check: it is the drift guard. The
+recorder spends tokens. It drives a real, non-interactive Claude Code session in a tutorial
+workspace: one `claude -p` call per learner turn, `--resume` in between, `--permission-mode
+bypassPermissions` (the workspace is a throwaway). It needs `claude`, logged in, and `node`.
 
 ```sh
-R=tutorial/record/record.sh
-sh $R steps                               # the agent steps, in order
+R=tutorial/maintainers/record/record.sh
+sh $R steps                               # the recorded steps, in order
 
 # Re-record everything with the recorded answers (each step continues from the previous one):
 sh $R all /tmp/rec-ws
 
 # Re-record one step, adapting the answers to what the agent now asks:
-sh $R prepare 02-use-the-factory/01-grill-with-docs /tmp/rec-ws   # setup for real, earlier steps replayed
-sh $R turn /tmp/rec-ws "/grill-with-docs business-backlog/BELT-US-1-submit-my-belt-for-sensei-validation.md"
-sh $R turn /tmp/rec-ws --choices "All ok, but write an ADR | 1 (b), the rest ok" "All ok."
+sh $R prepare 01-build-the-factory/03-context /tmp/rec-ws   # setup + install for real, earlier steps replayed
+sh $R turn /tmp/rec-ws /build-factory
+sh $R turn /tmp/rec-ws --choices "1 keep belt for both, the rest as recommended" "1 ok, 2 ok, …"
 # … one `turn` per answer, reading each question first …
-sh $R finish 02-use-the-factory/01-grill-with-docs /tmp/rec-ws      # writes the recording, runs the check
-# The next step continues in the same agent session when it did before (session: continued):
+sh $R finish 01-build-the-factory/03-context /tmp/rec-ws    # writes the recording, runs the check
+# A next step that ran in the same agent session (session: continued):
 sh $R turn /tmp/rec-ws --continue /to-spec
 ```
 
-- `run STEP WS` replays the learner turns of the current `transcript.md` against the real agent,
-  then `finish`es. Use it when the questions did not change. Edit the learner turns first to steer.
-- `finish` commits whatever the agent left uncommitted (so the next step starts from the same
-  state), copies every path changed since the step started into `files/`, writes
-  `transcript.md`, and **runs the step's check**: a recording that fails its check is rejected.
-- Answer as the domain expert would: the fixture's README and the story `Belt US-1` are the source
-  of truth. Keep the alternatives (`--choices`) plausible: they are what A2 offers.
-- A step depends on the previous ones: after re-recording step N, re-record (or at least re-run
-  the tests on) the steps after it. Then run `sh tutorial/test/run.sh` and review the diff of
-  `scenario/*/*/recording/`.
+- `run STEP WS` replays the learner turns of the current transcript against the real agent, then
+  `finish`es. Use it when the questions did not change.
+- `finish` commits what the agent left uncommitted, copies every path changed since the step
+  started into `files/`, writes `transcript.md` and **runs the step's check**: a recording that
+  fails its check is rejected.
+- Then review the step's `play` in `scenario.json`: it is a condensed excerpt of the transcript.
+  Make it say what the new run says, and keep each question's `turn` pointing at its recorded
+  answer (the linter checks it).
+- A step depends on the previous ones: after re-recording step N, re-record (or at least re-test)
+  the steps after it.
 - `PDSF_RECORD_MODEL` passes `--model`; `PDSF_RECORD_CLAUDE` replaces the agent command (the test
   suite uses a fake one).
-
-## Modes contract
-
-A shipped mode is a folder `modes/<id>-<slug>/` holding:
-
-- `mode.md`, with frontmatter `title:` and `summary:` (one line each, shown in the menu). The body
-  is free documentation (the mode's own variables, how it plays the steps).
-- `play.sh`, the mode's entry point.
-
-A folder without both files is not shipped and is not offered. The menu lists shipped modes in
-folder-name order. Ids: `a1` (narrated replay), `a2` (simulated session), `b` (real agent), all
-shipped.
-
-`tutorial.sh` runs `sh modes/<id>-<slug>/play.sh` **after the setup**:
-
-- cwd = the workspace; stdin = `/dev/tty` when there is one (else `/dev/null`); stdout/stderr =
-  the learner's terminal;
-- environment = every `PDSF_TUTO_*` variable above (`PDSF_TUTO_MODE` = the resolved id,
-  `PDSF_TUTO_HARNESS` normalised, `PDSF_TUTO_SKIP_CH2/3` = `y`|`n`, `PDSF_TUTO_PAUSE`);
-- the mode plays the chapters in order: for each one not skipped (`tuto_chapter_skipped`), it plays
-  each step: shows the title and command, the learner text, runs the action
-  (`tuto_run_action`), does or replays the agent work, then runs the check (`tuto_run_check`);
-- its exit status becomes the tutorial's. Then `tutorial.sh` prints "where to look next".
-
-The resolved PDSF source is removed when `tutorial.sh` exits (when it was fetched): a mode that
-needs files after its run copies them into the workspace. That is how the real-agent mode's guide
-skill gets **only** into the workspace, never into `skills/` (ADR-0006).
-
-## Shipped modes
-
-| Id | Folder | What it does |
-| --- | --- | --- |
-| `a1` | [`modes/a1-narrated-replay/`](modes/a1-narrated-replay/mode.md) | **Narrated replay**. Zero tokens: the learner reads along; deterministic steps run for real, agent steps replay a recorded real run, flagged SIMULATED. |
-| `a2` | [`modes/a2-simulated-session/`](modes/a2-simulated-session/mode.md) | **Simulated session**. Zero tokens, real gestures: for each chapter's agent steps, a sub-shell opens in the workspace with a stand-in `claude` first on its PATH (and only there). The learner types `claude`, the real slash commands, and answers the recorded questions as numbered choices (default = the recorded answer; an off-script answer is accepted and flagged). The stand-in writes the recorded files as A1 does, so the workspace ends in A1's state. Leaving the sub-shell runs the checks. Driven non-interactively by `PDSF_TUTO_A2_SESSION` / `PDSF_TUTO_A2_LEFT`. |
-| `b` | [`modes/b-real-agent/`](modes/b-real-agent/mode.md) | **Real agent**. Copies the guide skill `pdsf-tutorial` into the workspace (only there), then the learner starts their own harness and types `/pdsf-tutorial`. The guide follows the scenario, has the learner run the real PDSF skills, and runs each step's check. Spends tokens. |
-
-## Mode B from a shared PDO instance (optional)
-
-For a facilitator whose participants have no harness subscription of their own. **This is
-optional**: PDSF and mode B need no PDO, and nothing in PDO is specific to the tutorial. The
-recipe only uses what any PDO instance already has, an interactive run on a project.
-
-For each participant, on the PDO host:
-
-1. Create a fresh workspace in mode B, non-interactively:
-
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/Loulen/prompt-driven-software-factory/main/tutorial/tutorial.sh |
-     PDSF_TUTO_DIR=~/tutorial/alice PDSF_TUTO_HARNESS=claude PDSF_TUTO_MODE=b \
-     PDSF_TUTO_SKIP_CH2=n PDSF_TUTO_SKIP_CH3=n PDSF_TUTO_PAUSE=n sh
-   ```
-
-2. PDO runs each session in a git worktree of the project, and a worktree only holds committed
-   files. So commit the guide (it is git-excluded by default), and free `develop` so the session
-   can land the context there:
-
-   ```sh
-   cd ~/tutorial/alice
-   git add -f .agents/skills/pdsf-tutorial && git commit -qm "Tutorial guide (pdsf-tutorial)"
-   git checkout -q --detach
-   ```
-
-3. Add the workspace as a PDO project. Start an **interactive** run on it from any pipeline with a
-   single interactive agent node, with the prompt `/pdsf-tutorial`. The participant then follows
-   the guide from that run's terminal, exactly as in their own harness.
-
-One workspace and one run per participant. Workspaces are throwaway: delete them after the session.
-
-## Libraries (`lib/scenario.sh`, `lib/recording.sh`, `lib/replay.sh`)
-
-Source it after exporting `PDSF_TUTO_ROOT`:
-
-| Function | Does |
-| --- | --- |
-| `tuto_chapters` / `tuto_steps CHAPTER` | List chapter / step directories, in order |
-| `tuto_meta FILE KEY`, `tuto_body FILE`, `tuto_section FILE "Heading"` | Read a frontmatter value, the body, a `## Heading` section |
-| `tuto_step_title` / `tuto_step_kind` / `tuto_step_command STEP`, `tuto_step_id STEP` | Step metadata |
-| `tuto_chapter_number CHAPTER`, `tuto_chapter_skipped CHAPTER` | Chapter number; skippable and skipped by `PDSF_TUTO_SKIP_CH<n>` |
-| `tuto_has_action` / `tuto_run_action STEP` | The deterministic action, run in the workspace |
-| `tuto_run_check STEP` | The step's check, run in the workspace; its status is the verdict |
-| `tuto_has_recording STEP` | A recording is in the slot |
-| `tuto_modes`, `tuto_mode_id MODE` | Shipped modes; a mode's short id |
-| `tuto_ask VAR "prompt" default`, `tuto_pause`, `tuto_is_yes`, `tuto_is_no` | Prompts on `/dev/tty`, env-overridable |
-| `tuto_say`, `tuto_bold`, `tuto_dim`, `tuto_rule`, `tuto_die` | Terminal output |
-| `tuto_width`, `tuto_md WIDTH [PREFIX]`, `tuto_wrap WIDTH [PREFIX]` | The render width (`$COLUMNS`, else the terminal's, within 60–110); markdown on stdin rendered for the terminal, every line prefixed and kept within WIDTH display columns: paragraphs and list items re-flowed, `**bold**`, `` `code` `` highlighted (backticks kept without colours), fences shown indented without their ``` lines, kept as typed (a line too wide breaks at its last space that fits, on hanging lines; only a word longer than a line is cut), tables aligned in columns (cells wrapped when too wide, `header: value` fields when even that does not fit). Use it for any text a mode prints, so nothing hard-wraps outside its indent. `tuto_wrap` does the same for plain text (command output): lines kept as typed, no markup, wide lines broken between words on hanging lines, so no word is lost |
-
-`lib/recording.sh` (source it after `lib/scenario.sh`):
-
-| Function | Does |
-| --- | --- |
-| `rec_meta STEP KEY` | A frontmatter value of the step's `transcript.md` |
-| `rec_turn_count` / `rec_turn_role` / `rec_turn_text` / `rec_turn_choices STEP [N]` | The turns: how many, `learner`/`agent`, text, alternative answers |
-| `rec_files STEP` | The recorded files, workspace-relative |
-| `rec_apply STEP` | Replay the recorded end state onto the workspace (see § The replay) |
-| `rec_git ARGS…` | git in the workspace, with a fallback identity |
-
-`lib/replay.sh` (source it after `lib/recording.sh`): what the simulated modes (A1, A2 and its
-stand-in) show, written once so they look alike and keep within the terminal's width.
-
-| Function | Does |
-| --- | --- |
-| `rp_step_intro STEP NUM TAG [LEAD]`, `rp_step_tag STEP` | The step's header (title, tag, the command to type), then What you do and Under the hood |
-| `rp_step_action STEP`, `rp_step_check STEP` | The action, run for real, its output wrapped; the check, run for real, stopping the mode when it fails |
-| `rp_replay STEP` | The narrated replay of an agent step (mode A1): the recorded session in a SIMULATED frame, the files applied, what changed |
-| `sim_open` / `sim_close` / `sim_say` / `sim_note` / `sim_turn` | The SIMULATED frame and the turns inside it |
-| `rp_close_and_apply STEP`, `rp_changes BEFORE FROM` | Close the frame and `rec_apply`; what changed, from real git output |
-
-## The fixture: `blackbelt-lite`
-
-A small, public-safe, **from-scratch** rewrite of the Blackbelt domain. Nothing is copied from
-Ippon's internal Blackbelt repositories. It is in English, uses JavaScript ES modules, and has no
-npm dependency. It covers disciplines, belt colours WHITE → ORANGE → GREEN → BLUE → BROWN → BLACK,
-belt requests, mentor assignment, objectives validated by the mentor, the sensei's decision, and
-the workflow `REQUESTED → MENTOR_ASSIGNED → IN_PROGRESS → NEED_VALIDATION → VALIDATED / REFUSED`.
-A tiny CLI (`node src/cli.js list | show | request | assign-mentor | add-objective |
-validate-objective | decide | reset`) drives it. See its README.
-
-Its business backlog is the local markdown folder `business-backlog/`, one story per file. It is
-seeded with `Belt US-1 [user] Submit my belt for sensei validation`, which is **not** implemented.
-Chapter 2 implements it. Point the scaffold's business backlog at that folder.
 
 ## Tests
 
 ```sh
-sh tutorial/test/run.sh                          # the tutorial, played non-interactively
-(cd tutorial/fixture/blackbelt-lite && node --test)  # the fixture's own tests
+sh tutorial/test/run.sh                    # everything below, ~15 s, no token
+node --test tutorial/test/app.test.mjs     # the app's unit tests only
 ```
 
-The suite plays `tutorial.sh` against this checkout (`PDSF_SRC`) in temp dirs and asserts:
-
-- both harness layouts, piped and file invocation;
-- refusals: a non-empty workspace, a workspace inside the source;
-- the mode menu and its dispatch contract, using fake modes in a copy of the source;
-- the scenario's shape, and that the checks really discriminate;
-- the `install.sh` contract: no tutorial file installed, `PDSF_HARNESS` values unchanged;
-- every agent step's recording: present, in format 1, from a real agent, no machine path leaked;
-  the recording library (parsing, `rec_apply`);
-- **mode A1 played non-interactively on every chapter**, with a `claude` on `PATH` that must never
-  be called (zero tokens): every step and every check pass, every agent step is flagged
-  `SIMULATED`, and the workspace ends with both local backlogs, `CONTEXT.md` + ADRs on `develop`,
-  the Belt US-1 tickets, and the submission rule implemented with `node --test` green. Also: the
-  generic layout with chapters 2–3 skipped, and a failing check stopping the mode;
-- **mode A2 played non-interactively on every chapter** (the recorded path), with the same fake
-  `claude`, which must never be called: every check passes, and the workspace ends in **exactly
-  A1's state** (same branches, same trees, same commit messages). Also: a scripted session
-  (`PDSF_TUTO_A2_SESSION`) with an off-script answer (flagged, the recorded path continues), an
-  unknown command and an out-of-order one (answered with the available commands), a step left
-  halfway then resumed, steps left unplayed (replayed for the learner, or stopping the mode); the
-  stand-in on `PATH` only inside the session; a failing check stopping the mode;
-- the recorder, against a fake agent (turns, `--resume`, choices, files, `run`).
+- **The seam**: `tutorial.sh` played end to end with `PDSF_TUTO_SCRIPT` (the recorded path, and an
+  off-script session with Ctrl-C then a resume), asserting the transcript, every step check, the
+  workspace and its git history, and **every rendered screen** at 60×20, 80×24 and 120×40: no line
+  wider than the terminal, the coach band always the last 4 rows (so at most 2 lines of text), a
+  progress indicator and a call to action on every screen. A `claude` on `PATH` must never run.
+- **Unit** (`node --test`): widths, wrap and fit, components, key parsing, scripted input, the
+  scenario and its linter (on broken copies).
+- **Recordings**: their format, the recording library, the recorder (with a fake agent).
+- **Contract**: `install.sh` installs no tutorial file; `PDSF_HARNESS` keeps its values.
+- **Fixture**: `cd tutorial/fixture/blackbelt-lite && node --test`.
