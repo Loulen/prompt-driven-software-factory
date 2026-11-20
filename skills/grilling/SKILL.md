@@ -17,6 +17,8 @@ Each question should be formatted like so:
 ➡️ <your recommended answer>
 ```
 
+Route the round through your harness's **native question tool** if it has one — anything that renders a question as a pick-list the user answers without typing: one entry per frontier question, your recommended answer as the first option, flagged as such. When the tool caps a call below the round's size, split the round across calls; when a question's body or choices don't fit the tool, ask that one in the text format. With no such tool, the text format above is the whole contract.
+
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
 
 Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), find it yourself — dispatch a subagent if available, otherwise look it up inline; don't ask the user for anything you could find. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the result; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
